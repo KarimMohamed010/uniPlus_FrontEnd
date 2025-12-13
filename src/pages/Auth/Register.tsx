@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -12,18 +12,19 @@ import {
   Container,
   Alert,
   Grid,
-  MenuItem,
-  CircularProgress
-} from '@mui/material';
-import client from '../../api/client';
-import { useAuth } from '../../context/AuthContext';
+  CircularProgress,
+} from "@mui/material";
+import client from "../../api/client";
+import { useAuth } from "../../context/AuthContext";
+import {  AxiosError } from "axios";
 
 const schema = z.object({
-  fname: z.string().min(1, 'First name is required'),
-  lname: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Invalid email address'),
-  userPassword: z.string().min(6, 'Password must be at least 6 characters'),
-  role: z.enum(['student', 'admin']),
+  fname: z.string().min(1, "First name is required"),
+  lname: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  userPassword: z.string().min(6, "Password must be at least 6 characters"),
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  role: z.enum(["student", "admin"]),
   bio: z.string().optional(),
 });
 
@@ -32,40 +33,50 @@ type FormData = z.infer<typeof schema>;
 export default function Register() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-        role: 'student'
-    }
+      role: "student",
+    },
   });
 
   const onSubmit = async (data: FormData) => {
     setIsLoading(true);
-    setError('');
+    setError("");
     try {
-      const response = await client.post('/auth/sign-up', data);
-      const { token, user } = response.data;
+      const response = await client.post("/auth/sign-up", data);
+      const { token, user  } = response.data;
       login(token, user);
-      navigate('/');
-    } catch (err: any) {
+      navigate("/");
+    } catch (err ) {
       console.error(err);
-      setError(err.response?.data?.message || 'Failed to register');
+      if(err instanceof AxiosError && err.response)
+      {
+        setError(err.response.data.message);
+      }
+      else {
+        setError("Failed to register");
+      }
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
     <Box
       sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
         p: 2,
       }}
     >
@@ -74,89 +85,105 @@ export default function Register() {
           elevation={10}
           sx={{
             p: 5,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
             borderRadius: 3,
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            backgroundColor: "rgba(255, 255, 255, 0.95)",
           }}
         >
-          <Typography component="h1" variant="h4" fontWeight="bold" color="primary" gutterBottom>
+          <Typography
+            component="h1"
+            variant="h4"
+            fontWeight="bold"
+            color="primary"
+            gutterBottom
+          >
             Create Account
           </Typography>
           <Typography variant="body1" color="textSecondary" sx={{ mb: 4 }}>
             Join UniConnect today
           </Typography>
 
-          {error && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{error}</Alert>}
+          {error && (
+            <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
+              {error}
+            </Alert>
+          )}
 
-          <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ width: '100%' }}>
+          <Box
+            component="form"
+            onSubmit={handleSubmit(onSubmit)}
+            sx={{ width: "100%" }}
+          >
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   label="First Name"
-                  {...register('fname')}
+                  {...register("fname")}
                   error={!!errors.fname}
                   helperText={errors.fname?.message}
                 />
               </Grid>
+
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   label="Last Name"
-                  {...register('lname')}
+                  {...register("lname")}
                   error={!!errors.lname}
                   helperText={errors.lname?.message}
                 />
               </Grid>
+
               <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   label="Email Address"
                   type="email"
-                  {...register('email')}
+                  {...register("email")}
                   error={!!errors.email}
                   helperText={errors.email?.message}
                 />
               </Grid>
+
               <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   label="Password"
                   type="password"
-                  {...register('userPassword')}
+                  {...register("userPassword")}
                   error={!!errors.userPassword}
                   helperText={errors.userPassword?.message}
                 />
               </Grid>
+
+              {/* NEW USERNAME FIELD */}
               <Grid size={{ xs: 12 }}>
                 <TextField
-                  select
                   fullWidth
-                  label="Role"
-                  defaultValue="student"
-                  {...register('role')}
-                  error={!!errors.role}
-                  helperText={errors.role?.message}
-                >
-                  <MenuItem value="student">Student</MenuItem>
-                  <MenuItem value="admin">University Admin</MenuItem>
-                </TextField>
+                  label="Username"
+                  {...register("username")}
+                  error={!!errors.username}
+                  helperText={errors.username?.message}
+                />
               </Grid>
-               <Grid size={{ xs: 12 }}>
+
+
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   label="Bio (Optional)"
                   multiline
                   rows={2}
-                  {...register('bio')}
+                  {...register("bio")}
                   error={!!errors.bio}
                   helperText={errors.bio?.message}
                 />
               </Grid>
             </Grid>
-            
+
             <Button
               type="submit"
               fullWidth
@@ -165,13 +192,24 @@ export default function Register() {
               disabled={isLoading}
               sx={{ mt: 4, mb: 2, py: 1.5 }}
             >
-              {isLoading ? <CircularProgress size={24} color="inherit" /> : 'Sign Up'}
+              {isLoading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                "Sign Up"
+              )}
             </Button>
-            
-            <Box sx={{ textAlign: 'center', mt: 2 }}>
+
+            <Box sx={{ textAlign: "center", mt: 2 }}>
               <Typography variant="body2" color="textSecondary">
-                Already have an account?{' '}
-                <Link to="/login" style={{ textDecoration: 'none', fontWeight: 'bold', color: '#4F46E5' }}>
+                Already have an account?{" "}
+                <Link
+                  to="/login"
+                  style={{
+                    textDecoration: "none",
+                    fontWeight: "bold",
+                    color: "#4F46E5",
+                  }}
+                >
                   Sign In
                 </Link>
               </Typography>
