@@ -59,7 +59,7 @@ export default function Register() {
       console.error(err);
       if(err instanceof AxiosError && err.response)
       {
-        setError(err.response.data.message);
+        setError(err.response.data.error);
       }
       else {
         setError("Failed to register");
@@ -102,7 +102,7 @@ export default function Register() {
             Create Account
           </Typography>
           <Typography variant="body1" color="textSecondary" sx={{ mb: 4 }}>
-            Join UniConnect today
+            Join Uni+ today
           </Typography>
 
           {error && (
