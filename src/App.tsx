@@ -7,6 +7,7 @@ import TeamsList from "./pages/Teams/TeamsList";
 import EventsList from "./pages/Events/EventsList";
 import ChatPage from "./pages/Chat/ChatPage";
 import Profile from "./pages/Profile/Profile";
+import AdminDashboard from "./pages/Admin/AdminDashboard";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -25,6 +26,7 @@ function App() {
           <Route path="/events" element={<EventsList />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/admin" element={<AdminDashboard />} />
         </Route>
       </Route>
 

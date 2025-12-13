@@ -27,6 +27,7 @@ import {
   Event as EventIcon,
   Chat as ChatIcon,
   AccountCircle,
+  AdminPanelSettings as AdminIcon,
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
 
@@ -64,6 +65,9 @@ export default function Layout() {
     { text: "Teams", icon: <GroupIcon />, path: "/teams" },
     { text: "Events", icon: <EventIcon />, path: "/events" },
     { text: "Chat", icon: <ChatIcon />, path: "/chat" },
+    ...(user?.roles.global === "admin"
+      ? [{ text: "Admin", icon: <AdminIcon />, path: "/admin" }]
+      : []),
   ];
 
   const drawer = (
