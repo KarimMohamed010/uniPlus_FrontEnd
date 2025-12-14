@@ -138,7 +138,7 @@ export default function Layout() {
               "UniConnect"}
           </Typography>
           <div>
-            <Tooltip title={`@${user?.username}`} arrow>
+            <Tooltip title={`${user?.username}`} arrow>
               <IconButton
                 size="large"
                 aria-label="account of current user"

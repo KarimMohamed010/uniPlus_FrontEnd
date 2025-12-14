@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Box,
   Paper,
@@ -18,9 +18,13 @@ import {
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useAuth } from "../../context/AuthContext";
 import client from "../../api/client";
+import { FileUploaderRegular } from '@uploadcare/react-uploader';
+import '@uploadcare/react-uploader/core.css';
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
+  const uploaderRef = useRef<any>(null);
+  const latestFileRef = useRef<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
@@ -86,8 +90,8 @@ export default function Profile() {
       return false;
     }
 
-    if (newPassword.length < 8) {
-      setPasswordError("New password must be at least 8 characters");
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters");
       return false;
     }
 
@@ -177,20 +181,80 @@ export default function Profile() {
                   {user?.fname} {user?.lname}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {user?.email}
+                  {user?.username}
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 1, fontStyle: "italic" }}>
                   {user?.bio || "No bio added yet"}
                 </Typography>
+                <Typography variant="body2" sx={{ mt: 2, mb: 1, fontWeight: "bold" }}>
+                  Change Profile Picture
+                </Typography>
+                <FileUploaderRegular
+                  apiRef={uploaderRef}
+                  sourceList="local,camera,gdrive"
+                  classNameUploader="uc-light"
+                  pubkey="1ed9d5259738cb825f1c"
+                  cropPreset="1:1"
+                  onChange={(items) => {
+                    const successFile = items.allEntries.find(
+                      (f) => f.status === "success"
+                    );
+                    if (successFile) {
+                      latestFileRef.current = successFile;
+                      console.log("File changed/uploaded:", successFile.cdnUrl);
+                    }
+                  }}
+                  onDoneClick={() => {
+                    if (latestFileRef.current && user) {
+                      client
+                        .patch("/users/update-profile-pic", {
+                          imgUrl: latestFileRef.current.cdnUrl,
+                        })
+                        .then(() => {
+                          console.log("Profile picture updated on Done click");
+                          updateUser({ ...user, imgUrl: latestFileRef.current.cdnUrl });
+                          setSuccessMessage("Profile picture updated!");
+                          setTimeout(() => setSuccessMessage(""), 3000);
+                          latestFileRef.current = null;
+                        })
+                        .catch((err) => {
+                          console.error("Failed to update profile pic:", err);
+                        });
+                    }
+                  }}
+                  multiple={false}
+                  imgOnly={true}
+                  useCloudImageEditor={true}
+                />
+                
+                {user?.imgUrl && (
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    sx={{ mt: 2 }}
+                    onClick={() => {
+                      if (user) {
+                        client
+                          .patch("/users/update-profile-pic", {
+                            imgUrl: null,
+                          })
+                          .then(() => {
+                            updateUser({ ...user, imgUrl: undefined });
+                            setSuccessMessage("Profile picture removed!");
+                            setTimeout(() => setSuccessMessage(""), 3000);
+                          })
+                          .catch((err) => {
+                            console.error("Failed to remove profile pic:", err);
+                          });
+                      }
+                    }}
+                  >
+                    Remove Picture
+                  </Button>
+                )}
               </Box>
-              <Button
-                variant={isEditing ? "outlined" : "contained"}
-                onClick={() =>
-                  isEditing ? handleCancel() : setIsEditing(true)
-                }
-              >
-                {isEditing ? "Cancel" : "Edit Profile"}
-              </Button>
+             
             </CardContent>
           </Card>
         </Grid>
@@ -198,10 +262,21 @@ export default function Profile() {
         {/* Profile Information */}
         <Grid item xs={12}>
           <Paper sx={{ p: 3 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between" ,mb: 2}}>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Profile Information
             </Typography>
+             <Button
+                variant={isEditing ? "outlined" : "contained"}
+                onClick={() =>
+                  isEditing ? handleCancel() : setIsEditing(true)
+                }
+              >
+                {isEditing ? "Cancel" : "Edit Profile"}
+              </Button>
+              </Box>
             <Divider sx={{ mb: 2 }} />
+
 
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -284,7 +359,9 @@ export default function Profile() {
                 </Button>
               </Box>
             )}
+            
           </Paper>
+          
         </Grid>
 
         {/* Change Password Section */}
@@ -491,18 +568,6 @@ export default function Profile() {
                     Posts Created
                   </Typography>
                   <Typography variant="h5">0</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent sx={{ textAlign: "center" }}>
-                  <Typography color="textSecondary" gutterBottom>
-                    Member Since
-                  </Typography>
-                  <Typography variant="body2">
-                    {new Date().toLocaleDateString()}
-                  </Typography>
                 </CardContent>
               </Card>
             </Grid>
