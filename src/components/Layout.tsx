@@ -11,11 +11,13 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  ListItemAvatar,
   Toolbar,
   Typography,
   Avatar,
   Menu,
   MenuItem,
+  Divider,
   useMediaQuery,
   useTheme,
   Tooltip,
@@ -28,34 +30,48 @@ import {
   Chat as ChatIcon,
   AccountCircle,
   AdminPanelSettings as AdminIcon,
+  Notifications,
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
+import Badge from '@mui/material/Badge';
+import { format } from 'date-fns';
 
 const drawerWidth = 240;
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { unreadCount, unreadMessages } = useNotification();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [profileAnchorEl, setProfileAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [notificationAnchorEl, setNotificationAnchorEl] = React.useState<null | HTMLElement>(null);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
+  const handleProfileMenu = (event: React.MouseEvent<HTMLElement>) => {
+    setProfileAnchorEl(event.currentTarget);
   };
 
-  const handleClose = () => {
-    setAnchorEl(null);
+  const handleProfileClose = () => {
+    setProfileAnchorEl(null);
+  };
+
+  const handleNotificationMenu = (event: React.MouseEvent<HTMLElement>) => {
+    setNotificationAnchorEl(event.currentTarget);
+  };
+
+  const handleNotificationClose = () => {
+    setNotificationAnchorEl(null);
   };
 
   const handleLogout = () => {
-    handleClose();
+    handleProfileClose();
     logout();
     navigate("/login");
   };
@@ -138,13 +154,89 @@ export default function Layout() {
               "UniConnect"}
           </Typography>
           <div>
-            <Tooltip title={`@${user?.username}`} arrow>
+            <IconButton
+              size="large"
+              aria-label="show new notifications"
+              color="inherit"
+              onClick={handleNotificationMenu}
+            >
+              <Badge badgeContent={unreadCount} color="error">
+                <Notifications />
+              </Badge>
+            </IconButton>
+            <Menu
+              anchorEl={notificationAnchorEl}
+              open={Boolean(notificationAnchorEl)}
+              onClose={handleNotificationClose}
+              PaperProps={{
+                sx: { width: 360, maxHeight: 400 }
+              }}
+            >
+              {unreadMessages.length > 0 ? (
+                <>
+                  {unreadMessages.map((msg) => (
+                    <MenuItem
+                      key={msg.msgId}
+                      onClick={() => {
+                        navigate("/chat", { state: { activeChatId: msg.senderId } });
+                        handleNotificationClose();
+                      }}
+                      sx={{ whiteSpace: 'normal', py: 1.5 }}
+                    >
+                      <ListItemAvatar>
+                        <Avatar src={msg.senderImgUrl}>
+                          {msg.senderName.charAt(0)}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="subtitle2" noWrap>
+                          {msg.senderName}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                          }}
+                        >
+                          {msg.content}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {format(new Date(msg.sentAt), 'MMM d, h:mm a')}
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                  <Divider />
+                  <MenuItem
+                    onClick={() => {
+                      navigate("/chat");
+                      handleNotificationClose();
+                    }}
+                    sx={{ justifyContent: 'center', color: 'primary.main' }}
+                  >
+                    View All Messages
+                  </MenuItem>
+                </>
+              ) : (
+                <MenuItem disabled>
+                  <Typography variant="body2" color="text.secondary">
+                    No new messages
+                  </Typography>
+                </MenuItem>
+              )}
+            </Menu>
+            <Tooltip title={`${user?.username}`} arrow>
               <IconButton
                 size="large"
                 aria-label="account of current user"
                 aria-controls="menu-appbar"
                 aria-haspopup="true"
-                onClick={handleMenu}
+                onClick={handleProfileMenu}
                 color="inherit"
               >
                 {user?.imgUrl ? (
@@ -156,7 +248,7 @@ export default function Layout() {
             </Tooltip>
             <Menu
               id="menu-appbar"
-              anchorEl={anchorEl}
+              anchorEl={profileAnchorEl}
               anchorOrigin={{
                 vertical: "top",
                 horizontal: "right",
@@ -166,13 +258,13 @@ export default function Layout() {
                 vertical: "top",
                 horizontal: "right",
               }}
-              open={Boolean(anchorEl)}
-              onClose={handleClose}
+              open={Boolean(profileAnchorEl)}
+              onClose={handleProfileClose}
             >
               <MenuItem
                 onClick={() => {
                   navigate("/profile");
-                  handleClose();
+                  handleProfileClose();
                 }}
               >
                 Profile

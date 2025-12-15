@@ -36,7 +36,7 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 
 
-function stringToColor(string) {
+function stringToColor(string: string) {
   let hash = 0;
   let i;
 
@@ -56,11 +56,11 @@ function stringToColor(string) {
   return color;
 }
 
-function stringAvatar(name) {
+function stringAvatar(name: string) {
   if (!name) {
     return {
       sx: {
-        bgcolor: stringToColor(name),
+        bgcolor: stringToColor("?"),
       },
       children: '?',
     };

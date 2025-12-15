@@ -10,6 +10,7 @@ import {
   Avatar,
   ListItemText,
   TextField,
+  CircularProgress,
   IconButton,
   Divider,
   Fab,
@@ -22,6 +23,8 @@ import {
 import { Send, Add } from "@mui/icons-material";
 import { useSocket } from "../../hooks/useSocket";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../context/NotificationContext";
+import { useLocation } from "react-router-dom";
 import client from "../../api/client";
 import { format } from "date-fns";
 
@@ -41,25 +44,55 @@ interface ChatSession {
   lastMessage?: string;
   lastMessageTime?: string;
   seen?: boolean;
+  isSystem?: boolean; // New Field
+  imgUrl?: string;
 }
 
 export default function ChatPage() {
   const { user } = useAuth();
   const socket = useSocket();
+  const { refreshUnreadCount } = useNotification();
+  const location = useLocation();
+  const [isLoading, setIsLoading] = useState(true);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [conversations, setConversations] = useState<ChatSession[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]); // New State
   const [inputText, setInputText] = useState("");
   const [openNewChat, setOpenNewChat] = useState(false);
   const [newChatId, setNewChatId] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize Conversations (DMs only)
+  // Initialize Conversations (DMs only + System Announcements)
   useEffect(() => {
     const initChats = async () => {
       let initialConvos: ChatSession[] = [];
 
       try {
+        // Fetch System Announcements
+        let systemChat: ChatSession | null = null;
+        try {
+          const annRes = await client.get("/announcements");
+          const anns = annRes.data.announcements;
+          setAnnouncements(anns);
+          
+          if (anns.length > 0 || user?.roles.global === 'admin' || user?.roles.global === 'student') {
+             // Always show system chat
+             systemChat = {
+                id: -1, // Special ID
+                fname: "System",
+                lname: "Announcements",
+                lastMessage: anns[0]?.content || "No announcements yet",
+                lastMessageTime: anns[0]?.createdAt,
+                seen: true,
+                isSystem: true,
+                imgUrl: "", // Maybe a system icon URL later
+             };
+          }
+        } catch (err) {
+            console.error("Failed to fetch announcements", err);
+        }
+
         // Get both received and sent conversations
         const receivedRes = await client.get("/messages/received");
         const sentRes = await client.get("/messages/sent");
@@ -76,6 +109,7 @@ export default function ChatPage() {
             lastMessage: conv.lastMessage,
             lastMessageTime: conv.lastMessageTime,
             seen: conv.seen,
+            imgUrl: conv.imgUrl
           });
         });
 
@@ -95,6 +129,7 @@ export default function ChatPage() {
                 lastMessage: conv.lastMessage,
                 lastMessageTime: conv.lastMessageTime,
                 seen: conv.seen,
+                imgUrl: conv.imgUrl
               });
             }
           } else {
@@ -105,6 +140,7 @@ export default function ChatPage() {
               lastMessage: conv.lastMessage,
               lastMessageTime: conv.lastMessageTime,
               seen: conv.seen,
+              imgUrl: conv.imgUrl
             });
           }
         });
@@ -115,6 +151,10 @@ export default function ChatPage() {
             new Date(b.lastMessageTime || 0).getTime() -
             new Date(a.lastMessageTime || 0).getTime()
         );
+        
+        if (systemChat) {
+            initialConvos.unshift(systemChat);
+        }
 
         setConversations(initialConvos);
       } catch (e) {
@@ -123,7 +163,23 @@ export default function ChatPage() {
     };
 
     initChats();
-  }, [user]);
+    setIsLoading(false);
+    // Refresh notification count when entering chat page
+    refreshUnreadCount();
+  }, [user, refreshUnreadCount]);
+
+  // Handle navigation from notification click
+  useEffect(() => {
+    const state = location.state as { activeChatId?: number } | null;
+    if (state?.activeChatId && conversations.length > 0) {
+      const chatToActivate = conversations.find(c => c.id === state.activeChatId);
+      if (chatToActivate) {
+        setActiveChat(chatToActivate);
+      }
+      // Clear the state to prevent re-triggering
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, conversations]);
 
   // Socket Events - Only handle user messages
   useEffect(() => {
@@ -226,6 +282,8 @@ export default function ChatPage() {
             socket.emit("mark_messages_as_seen", {
               otherUserId: activeChat.id,
             });
+            // Refresh notification count after marking as seen
+            refreshUnreadCount();
           }
         }
       }
@@ -240,9 +298,35 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const refreshAnnouncements = async () => {
+    try {
+        const annRes = await client.get("/announcements");
+        setAnnouncements(annRes.data.announcements);
+        // also update the conversation preview
+        setConversations(prev => prev.map(c => 
+            c.isSystem ? { ...c, lastMessage: annRes.data.announcements[0]?.content || "No announcements" } : c
+        ));
+    } catch (e) { console.error(e); }
+  };
+
   const handleSendMessage = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!inputText.trim() || !activeChat || !socket) return;
+    if (!inputText.trim() || !activeChat) return;
+    
+    // Admin Announcement Logic
+    if (activeChat.isSystem) {
+        if (user?.roles.global === 'admin') {
+            client.post("/announcements", { content: inputText })
+                .then(() => {
+                    setInputText("");
+                    refreshAnnouncements();
+                })
+                .catch(err => alert("Failed to post announcement"));
+        }
+        return;
+    }
+
+    if (!socket) return;
     const content = inputText;
     setInputText("");
 
@@ -310,7 +394,10 @@ export default function ChatPage() {
   };
 
   return (
+  
+    
     <Box sx={{ height: "calc(100vh - 100px)", display: "flex", gap: 2 }}>
+      
       <Paper sx={{ width: 300, display: "flex", flexDirection: "column" }}>
         <Box
           sx={{
@@ -329,7 +416,11 @@ export default function ChatPage() {
             <Add />
           </Fab>
         </Box>
+        {isLoading &&
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>
+        }
         <Divider />
+        
         <List sx={{ flexGrow: 1, overflow: "auto" }}>
           {conversations.map((c, idx) => (
             <ListItem key={`${c.id}`} disablePadding>
@@ -338,16 +429,20 @@ export default function ChatPage() {
                 onClick={() => setActiveChat(c)}
               >
                 <ListItemAvatar>
-                  <Avatar>{c.fname.charAt(0)}</Avatar>
+                   {c.isSystem ? (
+                       <Avatar sx={{ bgcolor: 'secondary.main' }}>📢</Avatar>
+                   ) : (
+                       <Avatar src={c.imgUrl}>{c.fname.charAt(0) }</Avatar>
+                       
+                   )}
                 </ListItemAvatar>
                 <ListItemText
-                  primary={`${c.fname} ${c.lname}`}
+                  primary={c.isSystem ? "System Announcements" : `${c.fname} ${c.lname}`}
                   secondary={
                     <Typography
                       variant="body2"
                       sx={{
                         fontWeight: "normal",
-                        noWrap: true,
                         color: "text.secondary",
                       }}
                     >
@@ -368,7 +463,7 @@ export default function ChatPage() {
           <>
             <Box sx={{ p: 1, borderBottom: "1px solid #eee", mb: 2 }}>
               <Typography variant="h6">
-                {activeChat.fname} {activeChat.lname}
+                {activeChat.isSystem ? "System Announcements" : `${activeChat.fname} ${activeChat.lname}`}
               </Typography>
             </Box>
 
@@ -382,60 +477,94 @@ export default function ChatPage() {
                 gap: 1,
               }}
             >
-              {messages.map((msg, idx) => {
-                // Check if this is the last message sent by the current user
-                const isLastOwnMessage =
-                  msg.isOwn && !messages.slice(idx + 1).some((m) => m.isOwn);
-
-                return (
-                  <Box
-                    key={idx}
-                    sx={{
-                      alignSelf: msg.isOwn ? "flex-end" : "flex-start",
-                      maxWidth: "70%",
-                    }}
-                  >
-                    <Paper
-                      sx={{
-                        p: 1.5,
-                        bgcolor: msg.isOwn ? "primary.main" : "grey.100",
-                        color: msg.isOwn ? "white" : "text.primary",
-                        borderRadius: 2,
-                      }}
-                    >
-                      <Typography variant="body2">{msg.content}</Typography>
-                    </Paper>
+              {activeChat.isSystem ? (
+                  // Announcements Rendering
+                  announcements.map((ann, idx) => (
                     <Box
-                      sx={{
-                        ml: msg.isOwn ? 0 : 1,
-                        mr: msg.isOwn ? 1 : 0,
-                        display: "flex",
-                        gap: 0.5,
-                        alignItems: "center",
-                        justifyContent: msg.isOwn ? "flex-end" : "flex-start",
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
-                        sx={{ color: "text.secondary" }}
+                        key={ann.id || idx}
+                        sx={{
+                          alignSelf: "flex-start", // Always left-aligned or center
+                          width: "100%",
+                          mb: 2
+                        }}
                       >
-                        {format(new Date(msg.sentAt || Date.now()), "HH:mm")}
-                      </Typography>
-                      {isLastOwnMessage && (
-                        <Typography
-                          variant="caption"
+                        <Paper
                           sx={{
-                            color: msg.seen ? "primary.main" : "text.secondary",
-                            fontWeight: msg.seen ? "bold" : "normal",
+                            p: 2,
+                            bgcolor: "warning.light",
+                            color: "text.primary",
+                            borderRadius: 2,
                           }}
                         >
-                          {msg.seen ? "✓✓" : "✓"}
-                        </Typography>
-                      )}
+                          <Typography variant="subtitle2" fontWeight="bold">{ann.content}</Typography>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                             <Typography variant="caption" color="text.primary">
+                                {format(new Date(ann.createdAt), "PPpp")}
+                             </Typography>
+                             <Typography variant="caption" color="text.primary">
+                                - {ann.author?.fname} {ann.author?.lname}
+                             </Typography>
+                          </Box>
+                        </Paper>
                     </Box>
-                  </Box>
-                );
-              })}
+                  ))
+              ) : (
+                  // Regular Messages Rendering
+                  messages.map((msg, idx) => {
+                    // Check if this is the last message sent by the current user
+                    const isLastOwnMessage =
+                      msg.isOwn && !messages.slice(idx + 1).some((m) => m.isOwn);
+    
+                    return (
+                      <Box
+                        key={idx}
+                        sx={{
+                          alignSelf: msg.isOwn ? "flex-end" : "flex-start",
+                          maxWidth: "70%",
+                        }}
+                      >
+                        <Paper
+                          sx={{
+                            p: 1.5,
+                            bgcolor: msg.isOwn ? "primary.main" : "grey.100",
+                            color: msg.isOwn ? "white" : "text.primary",
+                            borderRadius: 2,
+                          }}
+                        >
+                          <Typography variant="body2">{msg.content}</Typography>
+                        </Paper>
+                        <Box
+                          sx={{
+                            ml: msg.isOwn ? 0 : 1,
+                            mr: msg.isOwn ? 1 : 0,
+                            display: "flex",
+                            gap: 0.5,
+                            alignItems: "center",
+                            justifyContent: msg.isOwn ? "flex-end" : "flex-start",
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            sx={{ color: "text.secondary" }}
+                          >
+                            {format(new Date(msg.sentAt || Date.now()), "HH:mm")}
+                          </Typography>
+                          {isLastOwnMessage && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: msg.seen ? "primary.main" : "text.secondary",
+                                fontWeight: msg.seen ? "bold" : "normal",
+                              }}
+                            >
+                              {msg.seen ? "✓✓" : "✓"}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    );
+                  })
+              )}
               <div ref={messagesEndRef} />
             </Box>
 
@@ -446,14 +575,17 @@ export default function ChatPage() {
             >
               <TextField
                 fullWidth
-                placeholder="Type a message..."
+                placeholder={activeChat.isSystem ? (user?.roles.global === 'admin' ? "Post an announcement..." : "Read only channel") : "Type a message..."}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 autoComplete="off"
+                disabled={activeChat.isSystem && user?.roles.global !== 'admin'}
               />
-              <IconButton color="primary" type="submit" size="large">
-                <Send />
-              </IconButton>
+              {(activeChat.isSystem && user?.roles.global === 'admin') || !activeChat.isSystem ? (
+                  <IconButton color="primary" type="submit" size="large">
+                    <Send />
+                  </IconButton>
+              ) : null}
             </Box>
           </>
         ) : (
