@@ -14,6 +14,7 @@ import {
   CircularProgress,
   InputAdornment,
   IconButton,
+  Collapse,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useAuth } from "../../context/AuthContext";
@@ -28,6 +29,7 @@ export default function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showPasswords, setShowPasswords] = useState({
     current: false,
@@ -45,6 +47,7 @@ export default function Profile() {
     lname: user?.lname || "",
     email: user?.email || "",
     bio: user?.bio || "",
+    username: user?.username || "",
   });
 
   const handleInputChange = (
@@ -60,13 +63,16 @@ export default function Profile() {
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      // TODO: Add API call to update profile
-      // await client.patch('/users/profile', formData);
+      
+      const res = await client.patch('/users/profile', formData)
+      updateUser({...user, ...res.data.user})
       setSuccessMessage("Profile updated successfully!");
       setIsEditing(false);
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error) {
       console.error("Failed to update profile:", error);
+      setErrorMessage("Failed to update profile. Please try again. " + error.response.data.error);
+      setTimeout(() => setErrorMessage(""), 3000);
     } finally {
       setIsLoading(false);
     }
@@ -77,6 +83,7 @@ export default function Profile() {
       fname: user?.fname || "",
       lname: user?.lname || "",
       email: user?.email || "",
+      username: user?.username || "",
       bio: user?.bio || "",
     });
     setIsEditing(false);
@@ -117,7 +124,7 @@ export default function Profile() {
 
     setIsLoading(true);
     try {
-      await client.patch("/users/change-password", {
+      await client.patch("/users/password", {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword,
       });
@@ -132,6 +139,8 @@ export default function Profile() {
     } catch (error) {
       console.error("Failed to change password:", error);
       setPasswordError("Failed to change password. Please try again.");
+      setTimeout(() => setPasswordError(""), 3000);
+
     } finally {
       setIsLoading(false);
     }
@@ -156,11 +165,16 @@ export default function Profile() {
 
   return (
     <Box sx={{ maxWidth: 800, mx: "auto" }}>
-      {successMessage && (
+      <Collapse in={!!successMessage}>
         <Alert severity="success" sx={{ mb: 2 }}>
           {successMessage}
         </Alert>
-      )}
+      </Collapse>
+      <Collapse in={!!errorMessage}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {errorMessage}
+        </Alert>
+      </Collapse>
 
       <Grid container spacing={3}>
         {/* Profile Header Card */}
@@ -207,7 +221,7 @@ export default function Profile() {
                   onDoneClick={() => {
                     if (latestFileRef.current && user) {
                       client
-                        .patch("/users/update-profile-pic", {
+                        .patch("/users/profile-pic", {
                           imgUrl: latestFileRef.current.cdnUrl,
                         })
                         .then(() => {
@@ -236,7 +250,7 @@ export default function Profile() {
                     onClick={() => {
                       if (user) {
                         client
-                          .patch("/users/update-profile-pic", {
+                          .patch("/users/profile-pic", {
                             imgUrl: null,
                           })
                           .then(() => {
@@ -309,6 +323,18 @@ export default function Profile() {
                   name="email"
                   type="email"
                   value={formData.email}
+                  onChange={handleInputChange}
+                  disabled={!isEditing}
+                  variant={isEditing ? "outlined" : "filled"}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Username"
+                  name="username"
+                  type="text"
+                  value={formData.username}
                   onChange={handleInputChange}
                   disabled={!isEditing}
                   variant={isEditing ? "outlined" : "filled"}

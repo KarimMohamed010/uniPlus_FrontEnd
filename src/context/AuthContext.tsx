@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import client from '../api/client';
 
 export interface UserRole {
   global: 'student' | 'admin';
