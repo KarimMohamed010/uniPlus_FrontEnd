@@ -34,7 +34,7 @@ import HowToRegIcon from '@mui/icons-material/HowToReg';
 import CancelIcon from '@mui/icons-material/Cancel';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
-import Rating from '@mui/material/Rating';
+
 
 function stringToColor(string) {
   let hash = 0;
@@ -228,24 +228,7 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
         return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>
     }
 
-    const [eventRatings, setEventRatings] = useState<Record<number, number | null>>({});
 
-  const handleRatingSubmit = async (eventId: number, rating: number | null) => {
-        if (rating === null) return;
-        
-        try {
-            // Make API call to save the rating
-            await client.post('/tickets/rate', {
-                eventId: eventId,
-                rating: Math.floor(rating),
-                feedback: null // You might want to make this dynamic
-            });
-            showSnackbar('Rating saved!', 'success');
-        } catch (error) {
-            console.error('Failed to save rating:', error);
-            showSnackbar('Failed to save rating', 'warning');
-        }
-    };
 
     return (
         <Box>
@@ -264,10 +247,10 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                 {events?.map((event) => {
                     // Check if this specific event is registered
                     const isRegistered = !!registeredEvents[event.id];
-                    const rateValue = eventRatings[event.id] || 0;
+                    
                     
                     return (
-                        <Grid size={{ xs: 12, md: 6, lg: 4 }} key={event.id}>
+                        <Grid size={{ xs: 12, md: 9, lg: 6 }} key={event.id}>
                             <Card sx={{display:'flex', maxWidth:'600px'}} >
                                 <CardMedia component="div" sx={{  backgroundColor:'gold',width:'140px',display: 'flex',flexDirection: 'column',justifyContent: 'center',p: 2.5,textAlign: 'center' }}>
                                     <Typography variant="h4" sx={{ fontWeight: 700,textTransform: 'uppercase' }}>
@@ -341,9 +324,7 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                         {isRegistered ? "Cancel" : "Register"}
                                     </Button>
                                     
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 2 }}>
-                                            
-                                    </Box>
+                                    
                                 </Box>
                                 </CardContent>
                                 <CardActions>
