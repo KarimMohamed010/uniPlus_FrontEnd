@@ -36,7 +36,7 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import Rating from '@mui/material/Rating';
 
-function stringToColor(string) {
+function stringToColor(string: string) {
   let hash = 0;
   let i;
 
@@ -56,11 +56,11 @@ function stringToColor(string) {
   return color;
 }
 
-function stringAvatar(name) {
+function stringAvatar(name: string) {
   if (!name) {
     return {
       sx: {
-        bgcolor: stringToColor(name),
+        bgcolor: stringToColor("?"),
       },
       children: '?',
     };
@@ -212,25 +212,9 @@ export default function EventsList() {
         severity: 'success' as 'success' | 'warning'
     });
 
-const showSnackbar = (message: string, severity: 'success' | 'warning') => {
-        setSnackbar({
-            open: true,
-            message,
-            severity
-        });
-    };
-
-    const handleCloseSnackbar = () => {
-        setSnackbar(prev => ({ ...prev, open: false }));
-    };
-
-    if (isLoading) {
-        return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>
-    }
-
     const [eventRatings, setEventRatings] = useState<Record<number, number | null>>({});
 
-  const handleRatingSubmit = async (eventId: number, rating: number | null) => {
+    const handleRatingSubmit = async (eventId: number, rating: number | null) => {
         if (rating === null) return;
         
         try {
@@ -246,6 +230,22 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
             showSnackbar('Failed to save rating', 'warning');
         }
     };
+
+    const showSnackbar = (message: string, severity: 'success' | 'warning') => {
+        setSnackbar({
+            open: true,
+            message,
+            severity
+        });
+    };
+
+    const handleCloseSnackbar = () => {
+        setSnackbar(prev => ({ ...prev, open: false }));
+    };
+
+    if (isLoading) {
+        return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>
+    }
 
     return (
         <Box>

@@ -69,7 +69,7 @@ export default function Profile() {
       setSuccessMessage("Profile updated successfully!");
       setIsEditing(false);
       setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (error) {
+    } catch (error : any) {
       console.error("Failed to update profile:", error);
       setErrorMessage("Failed to update profile. Please try again. " + error.response.data.error);
       setTimeout(() => setErrorMessage(""), 3000);
@@ -178,7 +178,7 @@ export default function Profile() {
 
       <Grid container spacing={3}>
         {/* Profile Header Card */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card>
             <CardContent
               sx={{ display: "flex", alignItems: "center", gap: 3, pb: 3 }}
@@ -274,7 +274,7 @@ export default function Profile() {
         </Grid>
 
         {/* Profile Information */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Paper sx={{ p: 3 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between" ,mb: 2}}>
             <Typography variant="h6" sx={{ mb: 2 }}>
@@ -293,7 +293,7 @@ export default function Profile() {
 
 
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   label="First Name"
@@ -304,7 +304,7 @@ export default function Profile() {
                   variant={isEditing ? "outlined" : "filled"}
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   label="Last Name"
@@ -316,7 +316,7 @@ export default function Profile() {
                 />
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   label="Email"
@@ -328,7 +328,7 @@ export default function Profile() {
                   variant={isEditing ? "outlined" : "filled"}
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   label="Username"
@@ -341,7 +341,7 @@ export default function Profile() {
                 />
               </Grid>
 
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField
                   fullWidth
                   label="Bio"
@@ -391,7 +391,7 @@ export default function Profile() {
         </Grid>
 
         {/* Change Password Section */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Paper sx={{ p: 3 }}>
             <Box
               sx={{
@@ -428,7 +428,7 @@ export default function Profile() {
                 )}
 
                 <Grid container spacing={2}>
-                  <Grid item xs={12}>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       fullWidth
                       label="Current Password"
@@ -459,7 +459,7 @@ export default function Profile() {
                     />
                   </Grid>
 
-                  <Grid item xs={12}>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       fullWidth
                       label="New Password"
@@ -489,7 +489,7 @@ export default function Profile() {
                     />
                   </Grid>
 
-                  <Grid item xs={12}>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       fullWidth
                       label="Confirm New Password"
@@ -565,9 +565,9 @@ export default function Profile() {
         </Grid>
 
         {/* Account Statistics (Optional) */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Card>
                 <CardContent sx={{ textAlign: "center" }}>
                   <Typography color="textSecondary" gutterBottom>
@@ -577,7 +577,7 @@ export default function Profile() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Card>
                 <CardContent sx={{ textAlign: "center" }}>
                   <Typography color="textSecondary" gutterBottom>
@@ -587,7 +587,7 @@ export default function Profile() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Card>
                 <CardContent sx={{ textAlign: "center" }}>
                   <Typography color="textSecondary" gutterBottom>
