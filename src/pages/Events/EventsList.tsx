@@ -243,16 +243,16 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                 </Button>
             </Box>
 
-            <Grid container spacing={3}>
+            <Grid container spacing={3} >
                 {events?.map((event) => {
                     // Check if this specific event is registered
                     const isRegistered = !!registeredEvents[event.id];
                     
                     
                     return (
-                        <Grid size={{ xs: 12, md: 9, lg: 6 }} key={event.id}>
-                            <Card sx={{display:'flex', maxWidth:'600px'}} >
-                                <CardMedia component="div" sx={{  backgroundColor:'gold',width:'140px',display: 'flex',flexDirection: 'column',justifyContent: 'center',p: 2.5,textAlign: 'center' }}>
+                        <Grid size="auto" key={event.id}>
+                            <Card sx={{display:'flex', maxWidth:'550px'}} >
+                                <CardMedia component="div" sx={{  backgroundColor:'gold',width:'120px',display: 'flex',flexDirection: 'column',justifyContent: 'center',p: 2.5,textAlign: 'center' }}>
                                     <Typography variant="h4" sx={{ fontWeight: 700,textTransform: 'uppercase' }}>
                                         {format(new Date(event.startTime), 'dd MMM yyyy')}
                                     </Typography>
@@ -260,7 +260,7 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                         {format(new Date(event.startTime), 'HH:mm')}
                                     </Typography>
                                 </CardMedia>
-                                <CardContent sx={{ flex: 1, p: { xs: 2, sm: 3 } }}>
+                                <CardContent >
                                     <Box sx={{display: 'flex',gap: 2,alignItems: 'center', marginBottom:'15px'}}>
                                         {event.team?.name && (
                                             <Tooltip title={event.team.name}>
