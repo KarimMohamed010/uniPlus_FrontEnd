@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect  } from 'react';
 import {
     Typography,
     Box,
@@ -7,19 +7,11 @@ import {
     CardActions,
     Button,
     CircularProgress,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    TextField,
-    DialogActions,
     Grid
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import client from '../../api/client';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from 'date-fns';
 import Avatar from '@mui/material/Avatar';
 import Tooltip from '@mui/material/Tooltip';
@@ -34,6 +26,8 @@ import HowToRegIcon from '@mui/icons-material/HowToReg';
 import CancelIcon from '@mui/icons-material/Cancel';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import { useAuth  } from '../../context/AuthContext';
+
 
 
 function stringToColor(string: string) {
@@ -89,27 +83,19 @@ interface Event {
     team: {
         id: number;
         name: string;
+        leaderId: number;
     };
     basePrice: number;
 }
 
-const createEventSchema = z.object({
-    title: z.string().min(1, 'Title is required'),
-    description: z.string().optional(),
-    type: z.string().min(1, 'Type is required'),
-    startTime: z.string().min(1, 'Start time is required'),
-    endTime: z.string().min(1, 'End time is required'),
-    teamId: z.coerce.number().min(1, 'Team ID is required'),
-});
 
-type CreateEventData = z.infer<typeof createEventSchema>;
+
 
 export default function EventsList() {
-    const [openCreate, setOpenCreate] = useState(false);
-    const queryClient = useQueryClient();
-    const [value, setValue] = React.useState();
+    const { user } = useAuth();
     // STATE TO TRACK REGISTRATION FOR EACH EVENT
     const [registeredEvents, setRegisteredEvents] = useState<Record<number, boolean>>({});
+    
 
     const { data: events, isLoading } = useQuery<Event[]>({
         queryKey: ['events'],
@@ -119,33 +105,51 @@ export default function EventsList() {
         }
     });
 
-    const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateEventData>({
-        resolver: zodResolver(createEventSchema) as any
-    });
 
-    const createMutation = useMutation({
-        mutationFn: async (data: CreateEventData) => {
-            const payload = {
-                ...data,
-                startTime: new Date(data.startTime).toISOString(),
-                endTime: new Date(data.endTime).toISOString()
-            };
-            return await client.post('/events', payload);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['events'] });
-            setOpenCreate(false);
-            reset();
-        },
-        onError: (error) => {
-            console.error(error);
-            alert('Failed to create event. Make sure you are an organizer and entered a valid Team ID.');
+interface RegisteredEvent {
+        eventId: number;
+        event: {
+            id: number;
+            title: string;
+            
+        };
+    }
+// to get the data for the registiration button
+    const { data: userRegisteredEvents, isLoading: isLoadingRegistrations } = useQuery<RegisteredEvent[]>({
+    queryKey: ['user-registered-events'],
+    queryFn: async () => {
+        try {
+            console.log('Fetching all registered events...');
+            const res = await client.get('/tickets/my/registration');
+            console.log('Registered events response:', res.data);
+            return res.data.events || [];
+        } catch (error) {
+            console.error('Failed to fetch registered events:', error);
+            return [];
         }
-    });
+    }
+});
 
-    const handleCreate = (data: CreateEventData) => {
-        createMutation.mutate(data);
-    };
+// Update useEffect to handle the new data
+useEffect(() => {
+    if (userRegisteredEvents) {
+        console.log('Processing registered events:', userRegisteredEvents);
+        
+        const initialRegisteredEvents: Record<number, boolean> = {};
+        userRegisteredEvents.forEach(reg => {
+            // The event ID might be in different places depending on your structure
+            const eventId = reg.event?.id || reg.eventId;
+            console.log(`Found registration for event ${eventId}:`, reg);
+            
+            if (eventId) {
+                initialRegisteredEvents[eventId] = true;
+            }
+        });
+        
+        console.log('Final registration state:', initialRegisteredEvents);
+        setRegisteredEvents(initialRegisteredEvents);
+    }
+}, [userRegisteredEvents]);
     
     // HANDLE REGISTRATION FOR A SPECIFIC EVENT
     const handleRegister = async (eventId: number) => {
@@ -227,9 +231,21 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
     if (isLoading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>
     }
+    
 
-
-
+    // state to remove the event
+    const [deletingId, setDeletingId] = useState<number | null>(null);
+    const handleDelete = async (eventId: number) => {
+  setDeletingId(eventId); 
+  try {
+    await client.delete(`/events/${eventId}`);
+  } catch (error) {
+    console.error("Error deleting:", error);
+    alert("Failed to delete event");
+  } finally {
+    setDeletingId(null);
+  }
+};
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -251,7 +267,7 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                     
                     return (
                         <Grid size="auto" key={event.id}>
-                            <Card sx={{display:'flex', maxWidth:'550px'}} >
+                            <Card sx={{display:'flex', maxWidth:'620px'}} >
                                 <CardMedia component="div" sx={{  backgroundColor:'gold',width:'120px',display: 'flex',flexDirection: 'column',justifyContent: 'center',p: 2.5,textAlign: 'center' }}>
                                     <Typography variant="h4" sx={{ fontWeight: 700,textTransform: 'uppercase' }}>
                                         {format(new Date(event.startTime), 'dd MMM yyyy')}
@@ -262,6 +278,7 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                 </CardMedia>
                                 <CardContent >
                                     <Box sx={{display: 'flex',gap: 2,alignItems: 'center', marginBottom:'15px'}}>
+
                                         {event.team?.name && (
                                             <Tooltip title={event.team.name}>
                                                 <Chip avatar={<Avatar 
@@ -284,8 +301,10 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                             {event.title}
                                         </Typography>
                                         <Chip label={event.type} sx={{backgroundColor:event.type === 'offline' ? '#EC4899' :'#818CF8', color:'white', fontWeight:550}}/>
+                                        {/** Delete button for user and Admins */}
+                                        {(event.team?.leaderId == user?.id || user?.roles?.global === 'admin') &&       <Button variant="outlined" color="error" size='small'  onClick={() => handleDelete(event.id)}>Delete</Button> }
+                                        
                                     </Box>
-                                    
                                     <Typography variant='h6'>Price: {event.basePrice}</Typography>
                                     
                                     <Divider sx={{marginBottom:'15px'}}/>
@@ -342,76 +361,12 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                 )}
             </Grid>
 
-            {/* Create Event Dialog */}
-            <Dialog open={openCreate} onClose={() => setOpenCreate(false)}>
-                <DialogTitle>Create New Event</DialogTitle>
-                <DialogContent>
-                    <TextField
-                        margin="dense"
-                        label="Title"
-                        fullWidth
-                        {...register('title')}
-                        error={!!errors.title}
-                        helperText={errors.title?.message}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="Type"
-                        fullWidth
-                        {...register('type')}
-                        error={!!errors.type}
-                        helperText={errors.type?.message}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="Team ID"
-                        type="number"
-                        fullWidth
-                        {...register('teamId')}
-                        error={!!errors.teamId}
-                        helperText={errors.teamId?.message}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="Start Time"
-                        type="datetime-local"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        {...register('startTime')}
-                        error={!!errors.startTime}
-                        helperText={errors.startTime?.message}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="End Time"
-                        type="datetime-local"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        {...register('endTime')}
-                        error={!!errors.endTime}
-                        helperText={errors.endTime?.message}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="Description"
-                        fullWidth
-                        multiline
-                        rows={3}
-                        {...register('description')}
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpenCreate(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit(handleCreate)} variant="contained" disabled={createMutation.isPending}>
-                        Create
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={6000}
                 onClose={handleCloseSnackbar}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
             >
                 <Alert 
                     onClose={handleCloseSnackbar} 
