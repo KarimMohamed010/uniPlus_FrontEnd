@@ -19,33 +19,40 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
   Grid,
   Alert,
   CircularProgress,
   InputAdornment,
-  IconButton,
+  Container,
 } from "@mui/material";
 import {
-  CheckCircle,
-  Cancel,
-  Edit,
-  Delete,
   Download,
-  Send,
   Search,
   Warning,
-  Person,
 } from "@mui/icons-material";
 import { useAuth } from "../../context/AuthContext";
 import client from "../../api/client";
+import { useForm } from "react-hook-form";
+import z from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { AxiosError } from "axios";
 
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
-  value: number;
+  value: number;  
 }
+const schema = z.object({
+  fname: z.string().min(1, "First name is required"),
+  lname: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  userPassword: z.string().min(6, "Password must be at least 6 characters"),
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  role: z.enum(["student", "admin"]),
+  bio: z.string().optional(),
+});
 
+type FormData = z.infer<typeof schema>;
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
 
@@ -63,6 +70,39 @@ function TabPanel(props: TabPanelProps) {
 }
 
 export default function AdminDashboard() {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      role: "student",
+    },
+  });
+
+   const [error, setError] = useState("");
+     const onSubmit = async (data: FormData) => {
+    setIsLoading(true);
+    setError("");
+    try {
+      await client.post("/admin", data);
+      setSuccessMessage("Admin created successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      console.error(err);
+      if(err instanceof AxiosError && err.response)
+      {
+        setError(err.response.data.error);
+      }
+      else {
+        setError("Failed to register");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const { user } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -71,28 +111,47 @@ export default function AdminDashboard() {
   // Event/Organization Approval States
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [approvalReason, setApprovalReason] = useState("");
-  const [selectedItem, setSelectedItem] = useState<any>(null);
-
-  // Admin Management States
-  const [adminSearch, setAdminSearch] = useState("");
-  const [searchedAdmin, setSearchedAdmin] = useState<any>(null);
+  const [pendingApprovals] = useState<Array<{
+    id: string;
+    name: string;
+    type: string;
+    submittedBy: string;
+    date: string;
+  }>>([]);
 
   // Reports States
   const [reportType, setReportType] = useState<"participation" | "engagement">(
     "participation"
   );
-  const [reportData, setReportData] = useState<any[]>([]);
+  const [reportData, setReportData] = useState<Array<{
+    id: string | number;
+    name: string;
+    value: number | string;
+  }>>([]);
 
   // Behavior Warning States
   const [warningUserId, setWarningUserId] = useState("");
   const [warningReason, setWarningReason] = useState("");
+  const [recentWarnings] = useState<Array<{
+    id: string | number;
+    user: string;
+    reason: string;
+    issuedDate: string;
+    status: string;
+  }>>([]);
 
   // User Management States
   const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [users] = useState<Array<{
+    id: string | number;
+    name: string;
+    username: string;
+    email: string;
+    role: string;
+    status: string;
+  }>>([]);
 
-  // Announcement States
-  const [announcementTitle, setAnnouncementTitle] = useState("");
-  const [announcementMessage, setAnnouncementMessage] = useState("");
+
 
   // Handlers for Event/Organization Approval
   const handleApproveItem = async (itemId: string, approved: boolean) => {
@@ -117,34 +176,7 @@ export default function AdminDashboard() {
   };
 
   // Handlers for Admin Management
-  const handleSearchAdmin = async () => {
-    if (!adminSearch.trim()) return;
-    try {
-      setIsLoading(true);
-      const response = await client.get(`/users/${adminSearch}`);
-      setSearchedAdmin(response.data.user);
-    } catch (error) {
-      console.error("Failed to search admin:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAddAdmin = async () => {
-    if (!searchedAdmin) return;
-    try {
-      setIsLoading(true);
-      await client.post("/admin", { userId: searchedAdmin.id });
-      setSuccessMessage("Admin added successfully!");
-      setAdminSearch("");
-      setSearchedAdmin(null);
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (error) {
-      console.error("Failed to add admin:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // These handlers are available for future use in admin management features
 
   // Handlers for Reports
   const handleGenerateReport = async () => {
@@ -191,7 +223,7 @@ export default function AdminDashboard() {
   };
 
   // Handlers for User Management
-  const handleToggleUserStatus = async (userId: string) => {
+  const handleToggleUserStatus = async (userId: string | number) => {
     try {
       setIsLoading(true);
       await client.patch(`/admin/users/${userId}/status`);
@@ -205,24 +237,7 @@ export default function AdminDashboard() {
   };
 
   // Handlers for Announcements
-  const handleSendAnnouncement = async () => {
-    if (!announcementTitle || !announcementMessage) return;
-    try {
-      setIsLoading(true);
-      await client.post("/admin/announcements", {
-        title: announcementTitle,
-        message: announcementMessage,
-      });
-      setSuccessMessage("Announcement sent successfully!");
-      setAnnouncementTitle("");
-      setAnnouncementMessage("");
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (error) {
-      console.error("Failed to send announcement:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // This handler is available for sending system announcements to all users;;
 
   if (user?.roles.global !== "admin") {
     return (
@@ -236,11 +251,11 @@ export default function AdminDashboard() {
 
   return (
     <Box sx={{ width: "100%" }}>
-      {successMessage && (
+      {/* {successMessage && (
         <Alert severity="success" sx={{ mb: 2 }}>
           {successMessage}
         </Alert>
-      )}
+      )} */}
 
       <Card>
         <CardContent>
@@ -254,11 +269,10 @@ export default function AdminDashboard() {
             aria-label="admin tabs"
           >
             <Tab label="Event/Org Approvals" id="admin-tab-0" />
-            <Tab label="Admin Management" id="admin-tab-1" />
+            <Tab label="Add Admin" id="admin-tab-1" />
             <Tab label="Reports" id="admin-tab-2" />
             <Tab label="Behavior Warnings" id="admin-tab-3" />
             <Tab label="User Management" id="admin-tab-4" />
-            <Tab label="Announcements" id="admin-tab-5" />
           </Tabs>
 
           {/* TAB 0: Event/Organization Approvals */}
@@ -279,7 +293,7 @@ export default function AdminDashboard() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {true ? (
+                    {pendingApprovals.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                           <Typography color="textSecondary">
@@ -287,7 +301,24 @@ export default function AdminDashboard() {
                           </Typography>
                         </TableCell>
                       </TableRow>
-                    ) : null}
+                    ) : (
+                      pendingApprovals.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell>{item.type}</TableCell>
+                          <TableCell>{item.submittedBy}</TableCell>
+                          <TableCell>{item.date}</TableCell>
+                          <TableCell>
+                            <Button
+                              size="small"
+                              onClick={() => setApprovalDialogOpen(true)}
+                            >
+                              Review
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -300,7 +331,7 @@ export default function AdminDashboard() {
                 fullWidth
               >
                 <DialogTitle>
-                  {selectedItem?.name} - Approval Decision
+                  Approval Decision
                 </DialogTitle>
                 <DialogContent sx={{ pt: 2 }}>
                   <TextField
@@ -321,14 +352,14 @@ export default function AdminDashboard() {
                     Cancel
                   </Button>
                   <Button
-                    onClick={() => handleApproveItem(selectedItem?.id, false)}
+                    onClick={() => handleApproveItem("1", false)}
                     color="error"
                     disabled={isLoading}
                   >
                     Reject
                   </Button>
                   <Button
-                    onClick={() => handleApproveItem(selectedItem?.id, true)}
+                    onClick={() => handleApproveItem("1", true)}
                     color="success"
                     variant="contained"
                     disabled={isLoading}
@@ -343,68 +374,144 @@ export default function AdminDashboard() {
           {/* TAB 1: Admin Management */}
           <TabPanel value={tabValue} index={1}>
             <Box>
-              <Typography variant="h6" sx={{ mb: 3 }}>
-                Add New Admin
-              </Typography>
 
-              <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
-                <TextField
-                  fullWidth
-                  placeholder="Search by username or email..."
-                  value={adminSearch}
-                  onChange={(e) => setAdminSearch(e.target.value)}
-                  disabled={isLoading}
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          onClick={handleSearchAdmin}
-                          disabled={isLoading}
-                        >
-                          <Search />
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Box>
-
-              {searchedAdmin && (
-                <Card sx={{ mb: 3, backgroundColor: "#f9f9f9" }}>
-                  <CardContent>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
+              <Box
+                sx={{
+                  minHeight: "100vh",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  // background:
+                  //   "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  // p: 2,
+                }}
+              >
+                <Container maxWidth="sm">
+                  <Paper
+                    elevation={10}
+                    sx={{
+                      p: 5,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      borderRadius: 3,
+                      backgroundColor: "rgba(255, 255, 255, 0.95)",
+                    }}
+                  >
+                    <Typography
+                      component="h1"
+                      variant="h4"
+                      fontWeight="bold"
+                      color="primary"
+                      gutterBottom
                     >
-                      <Box>
-                        <Typography variant="subtitle1">
-                          {searchedAdmin.fname} {searchedAdmin.lname}
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          @{searchedAdmin.username}
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          {searchedAdmin.email}
-                        </Typography>
-                      </Box>
-                      <Button
-                        variant="contained"
-                        onClick={handleAddAdmin}
-                        disabled={isLoading}
-                        startIcon={
-                          isLoading ? <CircularProgress size={20} /> : undefined
-                        }
-                      >
-                        {isLoading ? "Adding..." : "Make Admin"}
-                      </Button>
-                    </Box>
-                  </CardContent>
-                </Card>
-              )}
+                      Create Admin Account
+                    </Typography>
+                   
 
+                    {error && (
+                      <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
+                        {error}
+                      </Alert>
+                    )}
+                    {successMessage && (
+                      <Alert severity="success" sx={{ width: "100%", mb: 2 }}>
+                        {successMessage}
+                        </Alert>
+                        )}
+
+                    <Box
+                      component="form"
+                      onSubmit={handleSubmit(onSubmit)}
+                      sx={{ width: "100%" }}
+                    >
+                      <Grid container spacing={2}>
+                        <Grid key="fname" size={{ xs: 12, sm: 6 }}>
+                          <TextField
+                            fullWidth
+                            label="First Name"
+                            {...register("fname")}
+                            error={!!errors.fname}
+                            helperText={errors.fname?.message}
+                          />
+                        </Grid>
+
+                        <Grid key="lname" size={{ xs: 12, sm: 6 }}>
+                          <TextField
+                            fullWidth
+                            label="Last Name"
+                            {...register("lname")}
+                            error={!!errors.lname}
+                            helperText={errors.lname?.message}
+                          />
+                        </Grid>
+
+                        <Grid key="email" size={{ xs: 12 }}>
+                          <TextField
+                            fullWidth
+                            label="Email Address"
+                            type="email"
+                            {...register("email")}
+                            error={!!errors.email}
+                            helperText={errors.email?.message}
+                          />
+                        </Grid>
+
+                        <Grid key="password" size={{ xs: 12 }}>
+                          <TextField
+                            fullWidth
+                            label="Password"
+                            type="password"
+                            {...register("userPassword")}
+                            error={!!errors.userPassword}
+                            helperText={errors.userPassword?.message}
+                          />
+                        </Grid>
+
+                        {/* NEW USERNAME FIELD */}
+                        <Grid key="username" size={{ xs: 12 }}>
+                          <TextField
+                            fullWidth
+                            label="Username"
+                            {...register("username")}
+                            error={!!errors.username}
+                            helperText={errors.username?.message}
+                          />
+                        </Grid>
+
+                        <Grid key="bio" size={{ xs: 12 }}>
+                          <TextField
+                            fullWidth
+                            label="Bio (Optional)"
+                            multiline
+                            rows={2}
+                            {...register("bio")}
+                            error={!!errors.bio}
+                            helperText={errors.bio?.message}
+                          />
+                        </Grid>
+                      </Grid>
+
+                      <Button
+                        type="submit"
+                        fullWidth
+                        variant="contained"
+                        size="large"
+                        disabled={isLoading}
+                        sx={{ mt: 4, mb: 2, py: 1.5 }}
+                      >
+                        {isLoading ? (
+                          <CircularProgress size={24} color="inherit" />
+                        ) : (
+                          "Create"
+                        )}
+                      </Button>
+
+                      
+                    </Box>
+                  </Paper>
+                </Container>
+              </Box>
               <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
                 Current Admins
               </Typography>
@@ -440,7 +547,7 @@ export default function AdminDashboard() {
               </Typography>
 
               <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12} sm={6}>
+                <Grid key="reportType" size={{ xs: 12, sm: 6 }}>
                   <TextField
                     select
                     fullWidth
@@ -459,7 +566,7 @@ export default function AdminDashboard() {
                     <option value="engagement">Engagement Report</option>
                   </TextField>
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid key="generateBtn" size={{ xs: 12, sm: 6 }}>
                   <Button
                     fullWidth
                     variant="contained"
@@ -524,7 +631,7 @@ export default function AdminDashboard() {
 
               <Card sx={{ mb: 3, p: 2 }}>
                 <Grid container spacing={2}>
-                  <Grid item xs={12}>
+                  <Grid key="warningUserId" size={{ xs: 12 }}>
                     <TextField
                       fullWidth
                       label="User ID or Username"
@@ -534,7 +641,7 @@ export default function AdminDashboard() {
                       disabled={isLoading}
                     />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid key="warningReason" size={{ xs: 12 }}>
                     <TextField
                       fullWidth
                       label="Warning Reason"
@@ -546,7 +653,7 @@ export default function AdminDashboard() {
                       disabled={isLoading}
                     />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid key="warningBtn" size={{ xs: 12 }}>
                     <Button
                       fullWidth
                       variant="contained"
@@ -577,7 +684,7 @@ export default function AdminDashboard() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {true ? (
+                    {recentWarnings.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
                           <Typography color="textSecondary">
@@ -585,7 +692,16 @@ export default function AdminDashboard() {
                           </Typography>
                         </TableCell>
                       </TableRow>
-                    ) : null}
+                    ) : (
+                      recentWarnings.map((warning) => (
+                        <TableRow key={warning.id}>
+                          <TableCell>{warning.user}</TableCell>
+                          <TableCell>{warning.reason}</TableCell>
+                          <TableCell>{warning.issuedDate}</TableCell>
+                          <TableCell>{warning.status}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -627,7 +743,7 @@ export default function AdminDashboard() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {true ? (
+                    {users.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                           <Typography color="textSecondary">
@@ -635,74 +751,31 @@ export default function AdminDashboard() {
                           </Typography>
                         </TableCell>
                       </TableRow>
-                    ) : null}
+                    ) : (
+                      users.map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell>{user.name}</TableCell>
+                          <TableCell>{user.username}</TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>{user.role}</TableCell>
+                          <TableCell>{user.status}</TableCell>
+                          <TableCell>
+                            <Button
+                              size="small"
+                              onClick={() => handleToggleUserStatus(user.id)}
+                            >
+                              Update
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
             </Box>
           </TabPanel>
-
-          {/* TAB 5: Announcements */}
-          <TabPanel value={tabValue} index={5}>
-            <Box>
-              <Typography variant="h6" sx={{ mb: 3 }}>
-                Send System Announcement
-              </Typography>
-
-              <Card sx={{ mb: 3, p: 2 }}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Announcement Title"
-                      placeholder="e.g., System Maintenance Notice"
-                      value={announcementTitle}
-                      onChange={(e) => setAnnouncementTitle(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Message"
-                      placeholder="Enter your announcement message..."
-                      value={announcementMessage}
-                      onChange={(e) => setAnnouncementMessage(e.target.value)}
-                      multiline
-                      rows={5}
-                      disabled={isLoading}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      onClick={handleSendAnnouncement}
-                      disabled={
-                        isLoading || !announcementTitle || !announcementMessage
-                      }
-                      startIcon={
-                        isLoading ? <CircularProgress size={20} /> : <Send />
-                      }
-                    >
-                      {isLoading ? "Sending..." : "Send Announcement"}
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Card>
-
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Recent Announcements
-              </Typography>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <Paper sx={{ p: 3, textAlign: "center" }}>
-                  <Typography color="textSecondary">
-                    No announcements sent yet
-                  </Typography>
-                </Paper>
-              </Box>
-            </Box>
-          </TabPanel>
+          <TabPanel value={tabValue} index={5}></TabPanel>
         </CardContent>
       </Card>
     </Box>
