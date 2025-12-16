@@ -28,6 +28,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import { useAuth  } from '../../context/AuthContext';
+import { useNavigate } from "react-router-dom";
 import Rating from '@mui/material/Rating';
 import TextField from '@mui/material/TextField';
 
@@ -98,9 +99,11 @@ export default function EventsList() {
     // STATE TO TRACK REGISTRATION FOR EACH EVENT
     const [registeredEvents, setRegisteredEvents] = useState<Record<number, boolean>>({});
     const [deletingId, setDeletingId] = useState<number | null>(null);
-    const [value, setValue] = React.useState<number | null>();
+    
 
     const queryClient = useQueryClient(); 
+
+    const navigate = useNavigate();
 
     const { data: events, isLoading } = useQuery<Event[]>({
         queryKey: ['events'],
@@ -193,7 +196,7 @@ useEffect(() => {
     const handleCancel = async (eventId: number) => {
     try {
         // Call the cancel registration API
-        const response = await client.delete(`/tickets/${eventId}/cancel`);
+        const response = await client.delete(`/events/${eventId}/cancel`);
         
         // Update local state
         setRegisteredEvents(prev => ({
@@ -306,7 +309,7 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                                         transition: 'transform 0.2s',
                                                         '&:hover': { transform: 'scale(1.05)' }
                                                     }} 
-                                                /> } label={event.team.name} sx={{fontWeight:550}}/>
+                                                /> } label={event.team.name} sx={{fontWeight:550}} onClick={() => navigate(`/teams/${event.team.id}`)}/>
                                             </Tooltip>
                                         )}
                                         
@@ -526,7 +529,7 @@ function RateEvent({ eventId }: { eventId: number }) {
     });
 
     const handleSubmit = async () => {
-        if (!rating) return alert("Please select a star rating");
+        
         
         try {
             await client.post('/tickets/rate', {
@@ -535,7 +538,7 @@ function RateEvent({ eventId }: { eventId: number }) {
                 feedback: feedback
             });
             setSubmitted(true);
-            alert("Thanks for your feedback!");
+            
         } catch (error: any) {
             console.error(error);
             alert(error.response?.data?.error || "Failed to submit");
