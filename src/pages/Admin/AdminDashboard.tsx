@@ -116,16 +116,19 @@ export default function AdminDashboard() {
   >([]);
 
   // Reports States
-  const [reportType, setReportType] = useState<"participation" | "engagement">(
-    "participation"
-  );
-  const [reportData, setReportData] = useState<
-    Array<{
-      id: string | number;
-      name: string;
-      value: number | string;
-    }>
-  >([]);
+  const [reportType, setReportType] = useState<"participation" | "engagement">("participation");
+  const [reportScope, setReportScope] = useState<"event" | "team">("event");
+  const [timeRange, setTimeRange] = useState<"week" | "month" | "year" | "all">("month");
+  const [reportData, setReportData] = useState<Array<{
+    id: string | number;
+    name: string;
+    participants: number;
+    attendanceRate?: number;
+    engagementScore?: number;
+    totalInteractions?: number;
+    date: string;
+  }>>([]);
+  const [isReportGenerated, setIsReportGenerated] = useState(false);
 
   // Behavior Warning States
   const [warningUserId, setWarningUserId] = useState("");
@@ -222,24 +225,95 @@ export default function AdminDashboard() {
   const handleGenerateReport = async () => {
     try {
       setIsLoading(true);
-      const endpoint =
-        reportType === "participation"
-          ? "/admin/reports/participation"
-          : "/admin/reports/engagement";
-      const response = await client.get(endpoint);
-      setReportData(response.data.report.events || []);
+      setError("");
+      
+      // Make API call to get the report data
+      const response = await client.get(`/reports/${reportType}`, {
+        params: {
+          scope: reportScope,
+          timeRange: timeRange
+        }
+      });
+      
+      // Transform the API response to match our frontend data structure
+      const apiData = response.data.data || [];
+      
+      // Format the data for the table
+      const formattedData = apiData.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        participants: item.participants || 0,
+        attendanceRate: item.attendanceRate,
+        engagementScore: item.engagementScore,
+        totalInteractions: item.totalInteractions,
+        date: item.date || new Date().toISOString().split('T')[0]
+      }));
+      
+      setReportData(formattedData);
+      setIsReportGenerated(true);
       setSuccessMessage("Report generated successfully!");
       setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to generate report:", error);
+      const errorMessage = error.response?.data?.error || "Failed to generate report. Please try again.";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDownloadReport = () => {
-    // TODO: Implement CSV/PDF download functionality
-    console.log("Downloading report...");
+    try {
+      // Convert report data to CSV
+      const headers = [];
+      const dataRows = [];
+      
+      // Add headers based on report type
+      if (reportType === 'participation') {
+        headers.push('Name', 'Participants', 'Attendance Rate (%)', 'Date');
+        reportData.forEach(item => {
+          dataRows.push([
+            `"${item.name}"`,
+            item.participants,
+            item.attendanceRate,
+            new Date(item.date).toLocaleDateString()
+          ].join(','));
+        });
+      } else {
+        headers.push('Name', 'Engagement Score', 'Feedback Count', 'Participants', 'Date');
+        reportData.forEach(item => {
+          dataRows.push([
+            `"${item.name}"`,
+            item.engagementScore,
+            item.totalInteractions,
+            item.participants,
+            new Date(item.date).toLocaleDateString()
+          ].join(','));
+        });
+      }
+      
+      // Create CSV content
+      const csvContent = [
+        headers.join(','),
+        ...dataRows
+      ].join('\n');
+      
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${reportType}_report_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setSuccessMessage("Report downloaded successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (error) {
+      console.error("Error downloading report:", error);
+      setError("Failed to download report. Please try again.");
+    }
   };
 
   // Handlers for Behavior Warnings
@@ -616,17 +690,16 @@ export default function AdminDashboard() {
               </Typography>
 
               <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid key="reportType" size={{ xs: 12, sm: 6 }}>
+                <Grid key="reportType" item xs={12} sm={6} md={3}>
                   <TextField
                     select
                     fullWidth
                     label="Report Type"
                     value={reportType}
-                    onChange={(e) =>
-                      setReportType(
-                        e.target.value as "participation" | "engagement"
-                      )
-                    }
+                    onChange={(e) => {
+                      setReportType(e.target.value as "participation" | "engagement");
+                      setIsReportGenerated(false);
+                    }}
                     SelectProps={{
                       native: true,
                     }}
@@ -635,57 +708,186 @@ export default function AdminDashboard() {
                     <option value="engagement">Engagement Report</option>
                   </TextField>
                 </Grid>
-                <Grid key="generateBtn" size={{ xs: 12, sm: 6 }}>
+                
+                <Grid key="reportScope" item xs={12} sm={6} md={3}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Scope"
+                    value={reportScope}
+                    onChange={(e) => {
+                      setReportScope(e.target.value as "event" | "team");
+                      setIsReportGenerated(false);
+                    }}
+                    SelectProps={{
+                      native: true,
+                    }}
+                  >
+                    <option value="event">By Event</option>
+                    <option value="team">By Team</option>
+                  </TextField>
+                </Grid>
+                
+                <Grid key="timeRange" item xs={12} sm={6} md={3}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Time Range"
+                    value={timeRange}
+                    onChange={(e) => {
+                      setTimeRange(e.target.value as "week" | "month" | "year" | "all");
+                      setIsReportGenerated(false);
+                    }}
+                    SelectProps={{
+                      native: true,
+                    }}
+                  >
+                    <option value="week">Last 7 Days</option>
+                    <option value="month">This Month</option>
+                    <option value="year">This Year</option>
+                    <option value="all">All Time</option>
+                  </TextField>
+                </Grid>
+                
+                <Grid key="generateBtn" item xs={12} sm={6} md={3} sx={{ display: 'flex', alignItems: 'flex-end' }}>
                   <Button
                     fullWidth
                     variant="contained"
+                    color="primary"
                     onClick={handleGenerateReport}
                     disabled={isLoading}
-                    sx={{ mt: 1 }}
                     startIcon={
-                      isLoading ? <CircularProgress size={20} /> : undefined
+                      isLoading ? <CircularProgress size={20} color="inherit" /> : null
                     }
+                    sx={{ height: '56px' }}
                   >
                     {isLoading ? "Generating..." : "Generate Report"}
                   </Button>
                 </Grid>
               </Grid>
 
-              {reportData.length > 0 && (
+              {isReportGenerated && (
                 <Box>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}
-                  >
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="subtitle1">
+                      Showing {reportScope === 'event' ? 'Events' : 'Teams'} for {timeRange === 'week' ? 'Last 7 Days' : 
+                      timeRange === 'month' ? 'This Month' : 
+                      timeRange === 'year' ? 'This Year' : 'All Time'}
+                    </Typography>
                     <Button
                       variant="outlined"
                       startIcon={<Download />}
                       onClick={handleDownloadReport}
+                      disabled={reportData.length === 0}
                     >
-                      Download Report
+                      Download CSV
                     </Button>
                   </Box>
+                  
                   <TableContainer component={Paper}>
                     <Table>
                       <TableHead>
-                        <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                          <TableCell>Event Name</TableCell>
-                          <TableCell align="right">
-                            {reportType === "participation"
-                              ? "Participants"
-                              : "Engagement Score"}
-                          </TableCell>
+                        <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                          <TableCell>{reportScope === 'event' ? 'Event' : 'Team'} Name</TableCell>
+                          <TableCell align="right">Participants</TableCell>
+                          {reportType === 'participation' ? (
+                            <TableCell align="right">Attendance Rate</TableCell>
+                          ) : (
+                            <>
+                              <TableCell align="right">Engagement Score</TableCell>
+                              <TableCell align="right">Feedback Count</TableCell>
+                            </>
+                          )}
+                          <TableCell align="right">Date</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {reportData.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>{item.name}</TableCell>
-                            <TableCell align="right">{item.value}</TableCell>
+                        {reportData.length > 0 ? (
+                          reportData.map((item) => (
+                            <TableRow key={item.id} hover>
+                              <TableCell>{item.name}</TableCell>
+                              <TableCell align="right">{item.participants}</TableCell>
+                              {reportType === 'participation' ? (
+                                <TableCell align="right">
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                    <Box sx={{ width: '100%', maxWidth: '100px', mr: 1 }}>
+                                      <Box 
+                                        sx={{
+                                          height: '8px',
+                                          backgroundColor: '#e0e0e0',
+                                          borderRadius: '4px',
+                                          overflow: 'hidden'
+                                        }}
+                                      >
+                                        <Box 
+                                          sx={{
+                                            height: '100%',
+                                            width: `${item.attendanceRate}%`,
+                                            backgroundColor: item.attendanceRate >= 80 ? '#4caf50' : 
+                                                          item.attendanceRate >= 60 ? '#ff9800' : '#f44336',
+                                            transition: 'width 0.3s ease'
+                                          }}
+                                        />
+                                      </Box>
+                                    </Box>
+                                    {item.attendanceRate}%
+                                  </Box>
+                                </TableCell>
+                              ) : (
+                                <>
+                                  <TableCell align="right">
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                      <Box sx={{ mr: 1 }}>{item.engagementScore?.toFixed(1)}</Box>
+                                      <Box 
+                                        sx={{
+                                          width: '60px',
+                                          height: '8px',
+                                          backgroundColor: '#e0e0e0',
+                                          borderRadius: '4px',
+                                          overflow: 'hidden'
+                                        }}
+                                      >
+                                        <Box 
+                                          sx={{
+                                            height: '100%',
+                                            width: `${(item.engagementScore || 0) * 20}%`,
+                                            backgroundColor: (item.engagementScore || 0) >= 4 ? '#4caf50' : 
+                                                          (item.engagementScore || 0) >= 3 ? '#ff9800' : '#f44336',
+                                            transition: 'width 0.3s ease'
+                                          }}
+                                        />
+                                      </Box>
+                                    </Box>
+                                  </TableCell>
+                                  <TableCell align="right">{item.totalInteractions}</TableCell>
+                                </>
+                              )}
+                              <TableCell align="right">
+                                {new Date(item.date).toLocaleDateString()}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={reportType === 'participation' ? 4 : 5} align="center" sx={{ py: 4 }}>
+                              <Typography color="textSecondary">
+                                No data available for the selected filters
+                              </Typography>
+                            </TableCell>
                           </TableRow>
-                        ))}
+                        )}
                       </TableBody>
                     </Table>
                   </TableContainer>
+                  
+                  {reportData.length > 0 && (
+                    <Box sx={{ mt: 3, textAlign: 'center' }}>
+                      <Typography variant="body2" color="textSecondary">
+                        Showing {reportData.length} {reportScope === 'event' ? 'events' : 'teams'} • 
+                        Generated on {new Date().toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
                 </Box>
               )}
             </Box>
