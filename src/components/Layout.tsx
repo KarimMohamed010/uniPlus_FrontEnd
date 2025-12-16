@@ -32,6 +32,9 @@ import {
   AdminPanelSettings as AdminIcon,
   Notifications,
   Camera,
+  Message,
+  CarCrash,
+  DirectionsCar,
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
@@ -84,6 +87,7 @@ export default function Layout() {
     { text: "Teams", icon: <GroupIcon />, path: "/teams" },
     { text: "Events", icon: <EventIcon />, path: "/events" },
     { text: "Chat", icon: <ChatIcon />, path: "/chat" },
+    ...(user?.roles.global === "student" ? [{ text: "Rides", icon: <DirectionsCar />, path: "/Rides" }] : []),
     ...(user?.roles.global === "admin"
       ? [{ text: "Admin", icon: <AdminIcon />, path: "/admin" }]
       : []),
@@ -167,7 +171,7 @@ export default function Layout() {
               onClick={handleNotificationMenu}
             >
               <Badge badgeContent={unreadCount} color="error">
-                <Notifications />
+                <Message />
               </Badge>
             </IconButton>
             <Menu

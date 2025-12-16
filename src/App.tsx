@@ -13,6 +13,7 @@ import OrganizerDashboard from "./pages/OrganizerDashboard/OrganizerDashboard";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import TeamDetails from "./pages/Teams/TeamDetails";
+import Rides from "./pages/Rides/Rides";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/student-teams" element={<OrganizerDashboard />} />
+            <Route path="/rides" element={<Rides />} />
           </Route>
         </Route>
 
