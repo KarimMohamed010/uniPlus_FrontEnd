@@ -25,11 +25,7 @@ import {
   InputAdornment,
   Container,
 } from "@mui/material";
-import {
-  Download,
-  Search,
-  Warning,
-} from "@mui/icons-material";
+import { Download, Search, Warning } from "@mui/icons-material";
 import { useAuth } from "../../context/AuthContext";
 import client from "../../api/client";
 import { useForm } from "react-hook-form";
@@ -40,7 +36,7 @@ import { AxiosError } from "axios";
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
-  value: number;  
+  value: number;
 }
 const schema = z.object({
   fname: z.string().min(1, "First name is required"),
@@ -81,8 +77,8 @@ export default function AdminDashboard() {
     },
   });
 
-   const [error, setError] = useState("");
-     const onSubmit = async (data: FormData) => {
+  const [error, setError] = useState("");
+  const onSubmit = async (data: FormData) => {
     setIsLoading(true);
     setError("");
     try {
@@ -91,11 +87,9 @@ export default function AdminDashboard() {
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       console.error(err);
-      if(err instanceof AxiosError && err.response)
-      {
+      if (err instanceof AxiosError && err.response) {
         setError(err.response.data.error);
-      }
-      else {
+      } else {
         setError("Failed to register");
       }
     } finally {
@@ -111,47 +105,93 @@ export default function AdminDashboard() {
   // Event/Organization Approval States
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [approvalReason, setApprovalReason] = useState("");
-  const [pendingApprovals] = useState<Array<{
-    id: string;
-    name: string;
-    type: string;
-    submittedBy: string;
-    date: string;
-  }>>([]);
+  const [pendingApprovals] = useState<
+    Array<{
+      id: string;
+      name: string;
+      type: string;
+      submittedBy: string;
+      date: string;
+    }>
+  >([]);
 
   // Reports States
   const [reportType, setReportType] = useState<"participation" | "engagement">(
     "participation"
   );
-  const [reportData, setReportData] = useState<Array<{
-    id: string | number;
-    name: string;
-    value: number | string;
-  }>>([]);
+  const [reportData, setReportData] = useState<
+    Array<{
+      id: string | number;
+      name: string;
+      value: number | string;
+    }>
+  >([]);
 
   // Behavior Warning States
   const [warningUserId, setWarningUserId] = useState("");
   const [warningReason, setWarningReason] = useState("");
-  const [recentWarnings] = useState<Array<{
-    id: string | number;
-    user: string;
-    reason: string;
-    issuedDate: string;
-    status: string;
-  }>>([]);
+  const [recentWarnings] = useState<
+    Array<{
+      id: string | number;
+      user: string;
+      reason: string;
+      issuedDate: string;
+      status: string;
+    }>
+  >([]);
 
   // User Management States
   const [userSearchQuery, setUserSearchQuery] = useState("");
-  const [users] = useState<Array<{
-    id: string | number;
-    name: string;
-    username: string;
-    email: string;
-    role: string;
-    status: string;
-  }>>([]);
+  const [users] = useState<
+    Array<{
+      id: string | number;
+      name: string;
+      username: string;
+      email: string;
+      role: string;
+      status: string;
+    }>
+  >([]);
 
+  // Admin List State
+  const [adminsList, setAdminsList] = useState<
+    Array<{
+      id: number;
+      fname: string;
+      lname: string;
+      username: string;
+      email: string;
+    }>
+  >([]);
 
+  // Fetch Admins
+  const fetchAdmins = async () => {
+    try {
+      setIsLoading(true);
+      const response = await client.get("/admin");
+      setAdminsList(response.data.admins || []);
+    } catch (error) {
+      console.error("Failed to fetch admins:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Remove Admin Handler
+  const handleRemove = async (id : number) => {
+    try {
+      setIsLoading(true);
+      const response = await client.delete(`/admin/${id}`);
+      setSuccessMessage("Admin removed successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+      fetchAdmins();
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch admins:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Handlers for Event/Organization Approval
   const handleApproveItem = async (itemId: string, approved: boolean) => {
@@ -330,9 +370,7 @@ export default function AdminDashboard() {
                 maxWidth="sm"
                 fullWidth
               >
-                <DialogTitle>
-                  Approval Decision
-                </DialogTitle>
+                <DialogTitle>Approval Decision</DialogTitle>
                 <DialogContent sx={{ pt: 2 }}>
                   <TextField
                     fullWidth
@@ -374,7 +412,6 @@ export default function AdminDashboard() {
           {/* TAB 1: Admin Management */}
           <TabPanel value={tabValue} index={1}>
             <Box>
-
               <Box
                 sx={{
                   minHeight: "100vh",
@@ -407,7 +444,6 @@ export default function AdminDashboard() {
                     >
                       Create Admin Account
                     </Typography>
-                   
 
                     {error && (
                       <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
@@ -417,8 +453,8 @@ export default function AdminDashboard() {
                     {successMessage && (
                       <Alert severity="success" sx={{ width: "100%", mb: 2 }}>
                         {successMessage}
-                        </Alert>
-                        )}
+                      </Alert>
+                    )}
 
                     <Box
                       component="form"
@@ -506,15 +542,29 @@ export default function AdminDashboard() {
                           "Create"
                         )}
                       </Button>
-
-                      
                     </Box>
                   </Paper>
                 </Container>
               </Box>
-              <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
-                Current Admins
-              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mt: 4,
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6">Current Admins</Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={fetchAdmins}
+                  disabled={isLoading}
+                >
+                  {isLoading ? <CircularProgress size={20} /> : "Refresh"}
+                </Button>
+              </Box>
               <TableContainer component={Paper}>
                 <Table>
                   <TableHead>
@@ -526,13 +576,32 @@ export default function AdminDashboard() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                        <Typography color="textSecondary">
-                          No admins to display
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
+                    {adminsList.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                          <Typography color="textSecondary">
+                            No admins to display
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      adminsList.map((admin) => (
+                        <TableRow key={admin.id}>
+                          <TableCell>{`${admin.fname} ${admin.lname}`}</TableCell>
+                          <TableCell>{admin.username}</TableCell>
+                          <TableCell>{admin.email}</TableCell>
+                          <TableCell>
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={()=>handleRemove(admin.id )}
+                            >
+                              Remove
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
