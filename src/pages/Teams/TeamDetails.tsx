@@ -34,6 +34,7 @@ import {
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import EventsList from "../Events/EventsList";
 
 // --- Styled Components for the Layout ---
 const TeamBanner = styled(Box)(({ theme }) => ({
@@ -64,7 +65,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`team-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}   
+      {value === index && <Box sx={{ py: 3 }}>{children}</Box>} 
     </div>
   );
 }
@@ -265,7 +266,7 @@ export default function TeamDetails() {
   if (isLoading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-        <CircularProgress />   
+        <CircularProgress />
       </Box>
     );
   }
@@ -273,9 +274,9 @@ export default function TeamDetails() {
     return (
       <Paper sx={{ p: 4, mt: 4 }}>
         <Typography color="error" variant="h6">
-          Error loading team: {error?.message || "Team not found."}     
+          Error loading team: {error?.message || "Team not found."} 
         </Typography>
-          
+        
       </Paper>
     );
   } // --- Reusable Member List Rendering Component ---
@@ -322,20 +323,20 @@ export default function TeamDetails() {
             </Typography>
           )}
         </List>
-          
+        
       </Box>
     ); // --- Render the main Layout ---
 
   return (
     <Box sx={{ width: "100%", p: 3, display: "flex", flexDirection: "column" }}>
-      {/* 1. Header Banner */}   
+      {/* 1. Header Banner */} 
       <TeamBanner>
         <Typography variant="h3" sx={{ fontWeight: "bold" }}>
           {team.name}
         </Typography>
-        <Typography variant="h6">{team.description}</Typography>   
+        <Typography variant="h6">{team.description}</Typography> 
       </TeamBanner>
-        
+      
       <Box sx={{ mb: 3, display: "flex" }}>
         {isLeader && (
           <Button
@@ -383,9 +384,9 @@ export default function TeamDetails() {
             Leave Team
           </Button>
         )}
-          
+        
       </Box>
-      {/* 2. Navigation Tabs (Dynamic) */}   
+      {/* 2. Navigation Tabs (Dynamic) */} 
       <Paper sx={{ mb: 3 }} square={true}>
         <Tabs
           value={tabValue}
@@ -396,20 +397,20 @@ export default function TeamDetails() {
             <Tab key={tab.id} label={tab.label} />
           ))}
         </Tabs>
-          
+        
       </Paper>
-      {/* 3. Tab Content */} {/* Tab: Posts */}   
+      {/* 3. Tab Content */} {/* Tab: Posts */} 
       <TabPanel value={tabValue} index={tabIndexMap["posts"]}>
         <Typography variant="h5">Team Posts Feed</Typography>
         <Paper sx={{ p: 3, mt: 2 }}>
           <Typography>
-            Here you will render the list of posts for Team: 
+            Here you will render the list of posts for Team:
             {team.name}
           </Typography>
         </Paper>
-          
+        
       </TabPanel>
-      {/* Tab: Events */}   
+      {/* Tab: Events */} 
       <TabPanel value={tabValue} index={tabIndexMap["events"]}>
         <Stack
           direction="row"
@@ -429,14 +430,12 @@ export default function TeamDetails() {
             </Button>
           )}
         </Stack>
-        <Paper sx={{ p: 3, mt: 2 }}>
-          <Typography color="text.secondary">
-            List of upcoming and past events goes here.
-          </Typography>
-        </Paper>
-          
+        
+          <EventsList teamID={team.id} />
+        
+        
       </TabPanel>
-      {/* Tab: Members */}   
+      {/* Tab: Members */} 
       <TabPanel value={tabValue} index={tabIndexMap["members"]}>
         <Typography variant="h5">Team Members</Typography>
         {isMembersLoading ? (
@@ -465,7 +464,7 @@ export default function TeamDetails() {
                 </List>
               </Box>
             )}
-            {renderMemberList(organizersArray, "Organizers")}  
+            {renderMemberList(organizersArray, "Organizers")}
             {renderMemberList(hrArray, "HR Team")}
             {renderMemberList(mediaTeamArray, "Media Team")}
             {membersError && (
@@ -475,16 +474,16 @@ export default function TeamDetails() {
             )}
           </>
         )}
-          
+        
       </TabPanel>
-      {/* Conditional Tab: Pending Posts (Media Team/Leader Only) */}     
+      {/* Conditional Tab: Pending Posts (Media Team/Leader Only) */} 
       {(isMediaTeam || isLeader) && (
         <TabPanel value={tabValue} index={tabIndexMap["pendingPosts"]}>
           <Typography
             variant="h5"
             sx={{ display: "flex", alignItems: "center", gap: 1 }}
           >
-            <PhotoSizeSelectActualOutlined /> Pending Posts     
+            <PhotoSizeSelectActualOutlined /> Pending Posts 
           </Typography>
 
           <Paper sx={{ p: 3, mt: 2 }}>
@@ -495,7 +494,7 @@ export default function TeamDetails() {
           </Paper>
         </TabPanel>
       )}
-      {/* Conditional Tab: Join Requests (HR Team/Leader Only) */}   
+      {/* Conditional Tab: Join Requests (HR Team/Leader Only) */} 
       {(isHR || isLeader) && (
         <TabPanel value={tabValue} index={tabIndexMap["joinRequests"]}>
           <Typography
@@ -513,7 +512,7 @@ export default function TeamDetails() {
           </Paper>
         </TabPanel>
       )}
-      {/* Edit Team Dialog */}   
+      {/* Edit Team Dialog */} 
       {isLeader && (
         <Dialog open={openEdit} onClose={() => setOpenEdit(false)}>
           <DialogTitle>Edit Team: {team.name}</DialogTitle>
@@ -562,7 +561,7 @@ export default function TeamDetails() {
           </form>
         </Dialog>
       )}
-        
+      
     </Box>
   );
 }

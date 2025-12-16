@@ -24,7 +24,7 @@ import { Send, Add } from "@mui/icons-material";
 import { useSocket } from "../../hooks/useSocket";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import client from "../../api/client";
 import { format } from "date-fns";
 
@@ -41,6 +41,7 @@ interface ChatSession {
   id: number;
   fname: string;
   lname: string;
+  username?: string;
   lastMessage?: string;
   lastMessageTime?: string;
   seen?: boolean;
@@ -48,11 +49,14 @@ interface ChatSession {
   imgUrl?: string;
 }
 
+// ... (skipping to component)
+
 export default function ChatPage() {
   const { user } = useAuth();
   const socket = useSocket();
   const { refreshUnreadCount } = useNotification();
   const location = useLocation();
+  const navigate = useNavigate(); // Add this line
   const [isLoading, setIsLoading] = useState(true);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [conversations, setConversations] = useState<ChatSession[]>([]);
@@ -62,6 +66,23 @@ export default function ChatPage() {
   const [openNewChat, setOpenNewChat] = useState(false);
   const [newChatId, setNewChatId] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Unified Sort Function
+  const sortChats = (chats: ChatSession[]) => {
+    return [...chats].sort((a, b) => {
+      // 1. System Chat always first
+      if (a.isSystem) return -1;
+      if (b.isSystem) return 1;
+
+      // 2. Self Chat always second (after System)
+      if (a.id === user?.id) return -1;
+      if (b.id === user?.id) return 1;
+
+      // 3. Others sorted by time (newest first)
+      return new Date(b.lastMessageTime || 0).getTime() -
+        new Date(a.lastMessageTime || 0).getTime();
+    });
+  };
 
   // Initialize Conversations (DMs only + System Announcements)
   useEffect(() => {
@@ -75,22 +96,22 @@ export default function ChatPage() {
           const annRes = await client.get("/announcements");
           const anns = annRes.data.announcements;
           setAnnouncements(anns);
-          
+
           if (anns.length > 0 || user?.roles.global === 'admin' || user?.roles.global === 'student') {
-             // Always show system chat
-             systemChat = {
-                id: -1, // Special ID
-                fname: "System",
-                lname: "Announcements",
-                lastMessage: anns[0]?.content || "No announcements yet",
-                lastMessageTime: anns[0]?.createdAt,
-                seen: true,
-                isSystem: true,
-                imgUrl: "", // Maybe a system icon URL later
-             };
+            // Always show system chat
+            systemChat = {
+              id: -1, // Special ID
+              fname: "System",
+              lname: "Announcements",
+              lastMessage: anns[0]?.content || "No announcements yet",
+              lastMessageTime: anns[0]?.createdAt,
+              seen: true,
+              isSystem: true,
+              imgUrl: "", // Maybe a system icon URL later
+            };
           }
         } catch (err) {
-            console.error("Failed to fetch announcements", err);
+          console.error("Failed to fetch announcements", err);
         }
 
         // Get both received and sent conversations
@@ -106,6 +127,7 @@ export default function ChatPage() {
             id: conv.userId,
             fname: conv.fname,
             lname: conv.lname,
+            username: conv.username,
             lastMessage: conv.lastMessage,
             lastMessageTime: conv.lastMessageTime,
             seen: conv.seen,
@@ -126,6 +148,7 @@ export default function ChatPage() {
                 id: conv.userId,
                 fname: conv.fname,
                 lname: conv.lname,
+                username: conv.username,
                 lastMessage: conv.lastMessage,
                 lastMessageTime: conv.lastMessageTime,
                 seen: conv.seen,
@@ -137,6 +160,7 @@ export default function ChatPage() {
               id: conv.userId,
               fname: conv.fname,
               lname: conv.lname,
+              username: conv.username,
               lastMessage: conv.lastMessage,
               lastMessageTime: conv.lastMessageTime,
               seen: conv.seen,
@@ -145,18 +169,11 @@ export default function ChatPage() {
           }
         });
 
-        // Sort by newest first
-        initialConvos = Array.from(conversationMap.values()).sort(
-          (a, b) =>
-            new Date(b.lastMessageTime || 0).getTime() -
-            new Date(a.lastMessageTime || 0).getTime()
-        );
-        
+        let allConvos = Array.from(conversationMap.values());
         if (systemChat) {
-            initialConvos.unshift(systemChat);
+          allConvos.push(systemChat); // Add system chat to the list before sorting
         }
-
-        setConversations(initialConvos);
+        setConversations(sortChats(allConvos));
       } catch (e) {
         console.error("Failed to fetch conversations", e);
       }
@@ -168,42 +185,79 @@ export default function ChatPage() {
     refreshUnreadCount();
   }, [user, refreshUnreadCount]);
 
-  // Handle navigation from notification click
+  // Handle navigation from notification or profile click
   useEffect(() => {
     const state = location.state as { activeChatId?: number } | null;
-    if (state?.activeChatId && conversations.length > 0) {
+    if (state?.activeChatId) {
+      // If we are already in this chat, do nothing
+      if (activeChat?.id === state.activeChatId) {
+        // Clear state properly via router to update location object
+        navigate(location.pathname, { replace: true, state: {} });
+        return;
+      }
+
+      // Check if it's already in the list
       const chatToActivate = conversations.find(c => c.id === state.activeChatId);
       if (chatToActivate) {
         setActiveChat(chatToActivate);
+        navigate(location.pathname, { replace: true, state: {} });
+      } else {
+        // Chat doesn't exist yet, fetch user details
+        client.get(`/users/id/${state.activeChatId}`)
+          .then(res => {
+            const userData = res.data.user;
+
+            // Create the new chat object
+            const newChat: ChatSession = {
+              id: userData.id,
+              fname: userData.fname,
+              lname: userData.lname,
+              username: userData.username,
+              lastMessage: "New conversation",
+              seen: true,
+              imgUrl: userData.imgUrl
+            };
+
+            // Set active chat (the sync effect below will add it to conversations)
+            setActiveChat(newChat);
+          })
+          .catch(err => console.error("Failed to load chat user", err))
+          .finally(() => {
+            navigate(location.pathname, { replace: true, state: {} });
+          });
       }
-      // Clear the state to prevent re-triggering
-      window.history.replaceState({}, document.title);
     }
   }, [location.state, conversations]);
+
+  // Ensure activeChat is always in conversations (fixes race conditions with initChats)
+  useEffect(() => {
+    if (activeChat && !conversations.some(c => c.id === activeChat.id)) {
+      setConversations(prev => sortChats([activeChat, ...prev]));
+    }
+  }, [activeChat, conversations, user]);
 
   // Socket Events - Only handle user messages
   useEffect(() => {
     if (!socket) return;
 
     const handleReceiveMessage = (data: any) => {
+      // If I sent the message, I've already added it optimistically. Ignore it.
+      if (data.senderId === user?.id) return;
+
       // Update conversation with the new message (always, not just when active)
       setConversations((prev) => {
         const updated = prev.map((conv) =>
           conv.id === data.senderId
             ? {
-                ...conv,
-                lastMessage: data.content,
-                lastMessageTime: data.sentAt,
-                seen: false,
-              }
+              ...conv,
+              lastMessage: data.content,
+              lastMessageTime: data.sentAt,
+              seen: false,
+            }
             : conv
         );
-        // Sort by most recent first
-        return updated.sort(
-          (a, b) =>
-            new Date(b.lastMessageTime || 0).getTime() -
-            new Date(a.lastMessageTime || 0).getTime()
-        );
+        // Sort using unified logic
+        return sortChats(updated);
       });
 
       // Only add to messages and mark as seen if chat is active
@@ -220,7 +274,7 @@ export default function ChatPage() {
 
         // Mark as seen immediately
         socket.emit("mark_messages_as_seen", {
-          otherUserId: activeChat.id,
+          otherUserId: data.senderId,
         });
       }
     };
@@ -300,30 +354,30 @@ export default function ChatPage() {
 
   const refreshAnnouncements = async () => {
     try {
-        const annRes = await client.get("/announcements");
-        setAnnouncements(annRes.data.announcements);
-        // also update the conversation preview
-        setConversations(prev => prev.map(c => 
-            c.isSystem ? { ...c, lastMessage: annRes.data.announcements[0]?.content || "No announcements" } : c
-        ));
+      const annRes = await client.get("/announcements");
+      setAnnouncements(annRes.data.announcements);
+      // also update the conversation preview
+      setConversations(prev => prev.map(c =>
+        c.isSystem ? { ...c, lastMessage: annRes.data.announcements[0]?.content || "No announcements" } : c
+      ));
     } catch (e) { console.error(e); }
   };
 
   const handleSendMessage = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputText.trim() || !activeChat) return;
-    
+
     // Admin Announcement Logic
     if (activeChat.isSystem) {
-        if (user?.roles.global === 'admin') {
-            client.post("/announcements", { content: inputText })
-                .then(() => {
-                    setInputText("");
-                    refreshAnnouncements();
-                })
-                .catch(err => alert("Failed to post announcement"));
-        }
-        return;
+      if (user?.roles.global === 'admin') {
+        client.post("/announcements", { content: inputText })
+          .then(() => {
+            setInputText("");
+            refreshAnnouncements();
+          })
+          .catch(err => alert("Failed to post announcement"));
+      }
+      return;
     }
 
     if (!socket) return;
@@ -350,11 +404,11 @@ export default function ChatPage() {
             prev.map((conv) =>
               conv.id === activeChat.id
                 ? {
-                    ...conv,
-                    lastMessage: content,
-                    lastMessageTime: ack.sentAt,
-                    seen: false,
-                  }
+                  ...conv,
+                  lastMessage: content,
+                  lastMessageTime: ack.sentAt,
+                  seen: false,
+                }
                 : conv
             )
           );
@@ -374,6 +428,7 @@ export default function ChatPage() {
         id: userData.id,
         fname: userData.fname,
         lname: userData.lname,
+        username: userData.username,
         lastMessage: "New conversation",
         seen: true,
       };
@@ -394,10 +449,10 @@ export default function ChatPage() {
   };
 
   return (
-  
-    
+
+
     <Box sx={{ height: "calc(100vh - 100px)", display: "flex", gap: 2 }}>
-      
+
       <Paper sx={{ width: 300, display: "flex", flexDirection: "column" }}>
         <Box
           sx={{
@@ -417,10 +472,10 @@ export default function ChatPage() {
           </Fab>
         </Box>
         {isLoading &&
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>
         }
         <Divider />
-        
+
         <List sx={{ flexGrow: 1, overflow: "auto" }}>
           {conversations.map((c, idx) => (
             <ListItem key={`${c.id}`} disablePadding>
@@ -429,12 +484,12 @@ export default function ChatPage() {
                 onClick={() => setActiveChat(c)}
               >
                 <ListItemAvatar>
-                   {c.isSystem ? (
-                       <Avatar sx={{ bgcolor: 'secondary.main' }}>📢</Avatar>
-                   ) : (
-                       <Avatar src={c.imgUrl}>{c.fname.charAt(0) }</Avatar>
-                       
-                   )}
+                  {c.isSystem ? (
+                    <Avatar sx={{ bgcolor: 'secondary.main' }}>📢</Avatar>
+                  ) : (
+                    <Avatar src={c.imgUrl}>{c.fname.charAt(0)}</Avatar>
+
+                  )}
                 </ListItemAvatar>
                 <ListItemText
                   primary={c.isSystem ? "System Announcements" : `${c.fname} ${c.lname}`}
@@ -446,7 +501,7 @@ export default function ChatPage() {
                         color: "text.secondary",
                       }}
                     >
-                      {!c.isSystem&&(c.lastMessage)}
+                      {!c.isSystem && (c.lastMessage)}
                     </Typography>
                   }
                 />
@@ -463,7 +518,13 @@ export default function ChatPage() {
           <>
             <Box sx={{ p: 1, borderBottom: "1px solid #eee", mb: 2 }}>
               <Typography variant="h6">
-                {activeChat.isSystem ? "System Announcements" : `${activeChat.fname} ${activeChat.lname}`}
+                {activeChat.isSystem ? (
+                  "System Announcements"
+                ) : (
+                  <Link to={`/profile/${activeChat.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    {activeChat.fname} {activeChat.lname}
+                  </Link>
+                )}
               </Typography>
             </Box>
 
@@ -478,92 +539,92 @@ export default function ChatPage() {
               }}
             >
               {activeChat.isSystem ? (
-                  // Announcements Rendering
-                  announcements.map((ann, idx) => (
-                    <Box
-                        key={ann.id || idx}
-                        sx={{
-                          alignSelf: "flex-start", // Always left-aligned or center
-                          width: "100%",
-                          mb: 2
-                        }}
-                      >
-                        <Paper
-                          sx={{
-                            p: 2,
-                            bgcolor: "#FFEB3B",
-                            color: "text.primary",
-                            borderRadius: 2,
-                          }}
-                        >
-                          <Typography variant="subtitle2" fontWeight="bold">{ann.content}</Typography>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                             <Typography variant="caption" color="text.primary">
-                                {format(new Date(ann.createdAt), "PPpp")}
-                             </Typography>
-                             <Typography variant="caption" color="text.primary">
-                                - {ann.author?.fname} {ann.author?.lname}
-                             </Typography>
-                          </Box>
-                        </Paper>
-                    </Box>
-                  ))
+                // Announcements Rendering
+                announcements.map((ann, idx) => (
+                  <Box
+                    key={ann.id || idx}
+                    sx={{
+                      alignSelf: "flex-start", // Always left-aligned or center
+                      width: "100%",
+                      mb: 2
+                    }}
+                  >
+                    <Paper
+                      sx={{
+                        p: 2,
+                        bgcolor: "#FFEB3B",
+                        color: "text.primary",
+                        borderRadius: 2,
+                      }}
+                    >
+                      <Typography variant="subtitle2" fontWeight="bold">{ann.content}</Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                        <Typography variant="caption" color="text.primary">
+                          {format(new Date(ann.createdAt), "PPpp")}
+                        </Typography>
+                        <Typography variant="caption" color="text.primary">
+                          - {ann.author?.fname} {ann.author?.lname}
+                        </Typography>
+                      </Box>
+                    </Paper>
+                  </Box>
+                ))
               ) : (
-                  // Regular Messages Rendering
-                  messages.map((msg, idx) => {
-                    // Check if this is the last message sent by the current user
-                    const isLastOwnMessage =
-                      msg.isOwn && !messages.slice(idx + 1).some((m) => m.isOwn);
-    
-                    return (
-                      <Box
-                        key={idx}
+                // Regular Messages Rendering
+                messages.map((msg, idx) => {
+                  // Check if this is the last message sent by the current user
+                  const isLastOwnMessage =
+                    msg.isOwn && !messages.slice(idx + 1).some((m) => m.isOwn);
+
+                  return (
+                    <Box
+                      key={idx}
+                      sx={{
+                        alignSelf: msg.isOwn ? "flex-end" : "flex-start",
+                        maxWidth: "70%",
+                      }}
+                    >
+                      <Paper
                         sx={{
-                          alignSelf: msg.isOwn ? "flex-end" : "flex-start",
-                          maxWidth: "70%",
+                          p: 1.5,
+                          bgcolor: msg.isOwn ? "primary.main" : "grey.100",
+                          color: msg.isOwn ? "white" : "text.primary",
+                          borderRadius: 2,
                         }}
                       >
-                        <Paper
-                          sx={{
-                            p: 1.5,
-                            bgcolor: msg.isOwn ? "primary.main" : "grey.100",
-                            color: msg.isOwn ? "white" : "text.primary",
-                            borderRadius: 2,
-                          }}
+                        <Typography variant="body2">{msg.content}</Typography>
+                      </Paper>
+                      <Box
+                        sx={{
+                          ml: msg.isOwn ? 0 : 1,
+                          mr: msg.isOwn ? 1 : 0,
+                          display: "flex",
+                          gap: 0.5,
+                          alignItems: "center",
+                          justifyContent: msg.isOwn ? "flex-end" : "flex-start",
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          sx={{ color: "text.secondary" }}
                         >
-                          <Typography variant="body2">{msg.content}</Typography>
-                        </Paper>
-                        <Box
-                          sx={{
-                            ml: msg.isOwn ? 0 : 1,
-                            mr: msg.isOwn ? 1 : 0,
-                            display: "flex",
-                            gap: 0.5,
-                            alignItems: "center",
-                            justifyContent: msg.isOwn ? "flex-end" : "flex-start",
-                          }}
-                        >
+                          {format(new Date(msg.sentAt || Date.now()), "HH:mm")}
+                        </Typography>
+                        {isLastOwnMessage && (
                           <Typography
                             variant="caption"
-                            sx={{ color: "text.secondary" }}
+                            sx={{
+                              color: msg.seen ? "primary.main" : "text.secondary",
+                              fontWeight: msg.seen ? "bold" : "normal",
+                            }}
                           >
-                            {format(new Date(msg.sentAt || Date.now()), "HH:mm")}
+                            {msg.seen ? "✓✓" : "✓"}
                           </Typography>
-                          {isLastOwnMessage && (
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                color: msg.seen ? "primary.main" : "text.secondary",
-                                fontWeight: msg.seen ? "bold" : "normal",
-                              }}
-                            >
-                              {msg.seen ? "✓✓" : "✓"}
-                            </Typography>
-                          )}
-                        </Box>
+                        )}
                       </Box>
-                    );
-                  })
+                    </Box>
+                  );
+                })
               )}
               <div ref={messagesEndRef} />
             </Box>
@@ -582,9 +643,9 @@ export default function ChatPage() {
                 disabled={activeChat.isSystem && user?.roles.global !== 'admin'}
               />
               {(activeChat.isSystem && user?.roles.global === 'admin') || !activeChat.isSystem ? (
-                  <IconButton color="primary" type="submit" size="large">
-                    <Send />
-                  </IconButton>
+                <IconButton color="primary" type="submit" size="large">
+                  <Send />
+                </IconButton>
               ) : null}
             </Box>
           </>

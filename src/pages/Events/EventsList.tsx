@@ -94,7 +94,7 @@ interface Event {
 
 
 
-export default function EventsList() {
+export default function EventsList({ teamID = -1 }: {teamID?:number }) {
     const { user } = useAuth();
     // STATE TO TRACK REGISTRATION FOR EACH EVENT
     const [registeredEvents, setRegisteredEvents] = useState<Record<number, boolean>>({});
@@ -106,11 +106,18 @@ export default function EventsList() {
     const navigate = useNavigate();
 
     const { data: events, isLoading } = useQuery<Event[]>({
-        queryKey: ['events'],
+        queryKey: ['events',teamID],
         queryFn: async () => {
-            const res = await client.get('/events');
-            
-            return res.data.events;
+            if (teamID !== -1) {
+                // Case A: Fetch specific team events
+                // (Replace '/events/team/...' with your actual endpoint)
+                const res = await client.get(`/events/team/${teamID}`);
+                return res.data.events;
+            } else {
+                // Case B: Fetch all events (Default)
+                const res = await client.get('/events');
+                return res.data.events;
+            }
         }
     });
 
@@ -263,16 +270,10 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            {teamID == -1 && <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h4">Events</Typography>
-                <Button
-                    variant="contained"
-                    startIcon={<Add />}
-                    onClick={() => setOpenCreate(true)}
-                >
-                    Create Event
-                </Button>
-            </Box>
+                
+            </Box>}
 
             <Grid container spacing={3} >
                 {events?.map((event) => {
