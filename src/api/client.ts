@@ -27,8 +27,8 @@ client.interceptors.response.use(
     (error) => {
         if (error.response && error.response.status === 401) {
             // Optional: Logout user if token is invalid
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            // localStorage.removeItem('token');
+            // localStorage.removeItem('user');
             // window.location.href = '/login'; // Force redirect if needed
         }
         return Promise.reject(error);

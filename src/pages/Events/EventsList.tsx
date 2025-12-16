@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect  } from 'react';
 import {
     Typography,
     Box,
@@ -7,19 +7,12 @@ import {
     CardActions,
     Button,
     CircularProgress,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    TextField,
-    DialogActions,
     Grid
 } from '@mui/material';
+import ShowQRButton from '../../components/ShowQrButton';
 import { Add } from '@mui/icons-material';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import client from '../../api/client';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from 'date-fns';
 import Avatar from '@mui/material/Avatar';
 import Tooltip from '@mui/material/Tooltip';
@@ -34,7 +27,10 @@ import HowToRegIcon from '@mui/icons-material/HowToReg';
 import CancelIcon from '@mui/icons-material/Cancel';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import { useAuth  } from '../../context/AuthContext';
 import Rating from '@mui/material/Rating';
+import TextField from '@mui/material/TextField';
+
 
 function stringToColor(string: string) {
   let hash = 0;
@@ -89,63 +85,77 @@ interface Event {
     team: {
         id: number;
         name: string;
+        leaderId: number;
     };
     basePrice: number;
 }
 
-const createEventSchema = z.object({
-    title: z.string().min(1, 'Title is required'),
-    description: z.string().optional(),
-    type: z.string().min(1, 'Type is required'),
-    startTime: z.string().min(1, 'Start time is required'),
-    endTime: z.string().min(1, 'End time is required'),
-    teamId: z.coerce.number().min(1, 'Team ID is required'),
-});
 
-type CreateEventData = z.infer<typeof createEventSchema>;
+
 
 export default function EventsList() {
-    const [openCreate, setOpenCreate] = useState(false);
-    const queryClient = useQueryClient();
-    const [value, setValue] = React.useState();
+    const { user } = useAuth();
     // STATE TO TRACK REGISTRATION FOR EACH EVENT
     const [registeredEvents, setRegisteredEvents] = useState<Record<number, boolean>>({});
+    const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [value, setValue] = React.useState<number | null>();
+
+    const queryClient = useQueryClient(); 
 
     const { data: events, isLoading } = useQuery<Event[]>({
         queryKey: ['events'],
         queryFn: async () => {
             const res = await client.get('/events');
+            
             return res.data.events;
         }
     });
 
-    const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateEventData>({
-        resolver: zodResolver(createEventSchema) as any
-    });
 
-    const createMutation = useMutation({
-        mutationFn: async (data: CreateEventData) => {
-            const payload = {
-                ...data,
-                startTime: new Date(data.startTime).toISOString(),
-                endTime: new Date(data.endTime).toISOString()
-            };
-            return await client.post('/events', payload);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['events'] });
-            setOpenCreate(false);
-            reset();
-        },
-        onError: (error) => {
-            console.error(error);
-            alert('Failed to create event. Make sure you are an organizer and entered a valid Team ID.');
+interface RegisteredEvent {
+        eventId: number;
+        event: {
+            id: number;
+            title: string;
+            
+        };
+    }
+// to get the data for the registiration button
+    const { data: userRegisteredEvents, isLoading: isLoadingRegistrations } = useQuery<RegisteredEvent[]>({
+    queryKey: ['user-registered-events'],
+    queryFn: async () => {
+        try {
+            console.log('Fetching all registered events...');
+            const res = await client.get('/tickets/my/registration');
+            console.log('Registered events response:', res.data);
+            return res.data.events || [];
+        } catch (error) {
+            console.error('Failed to fetch registered events:', error);
+            return [];
         }
-    });
+    }
+});
 
-    const handleCreate = (data: CreateEventData) => {
-        createMutation.mutate(data);
-    };
+// Update useEffect to handle the new data
+useEffect(() => {
+    if (userRegisteredEvents) {
+        console.log('Processing registered events:', userRegisteredEvents);
+        
+        const initialRegisteredEvents: Record<number, boolean> = {};
+        userRegisteredEvents.forEach(reg => {
+            // The event ID might be in different places depending on your structure
+            const eventId = reg.event?.id || reg.eventId;
+            console.log(`Found registration for event ${eventId}:`, reg);
+            
+            if (eventId) {
+                initialRegisteredEvents[eventId] = true;
+            }
+        });
+        
+        console.log('Final registration state:', initialRegisteredEvents);
+        setRegisteredEvents(initialRegisteredEvents);
+    }
+}, [userRegisteredEvents]);
     
     // HANDLE REGISTRATION FOR A SPECIFIC EVENT
     const handleRegister = async (eventId: number) => {
@@ -212,26 +222,7 @@ export default function EventsList() {
         severity: 'success' as 'success' | 'warning'
     });
 
-    const [eventRatings, setEventRatings] = useState<Record<number, number | null>>({});
-
-    const handleRatingSubmit = async (eventId: number, rating: number | null) => {
-        if (rating === null) return;
-        
-        try {
-            // Make API call to save the rating
-            await client.post('/tickets/rate', {
-                eventId: eventId,
-                rating: Math.floor(rating),
-                feedback: null // You might want to make this dynamic
-            });
-            showSnackbar('Rating saved!', 'success');
-        } catch (error) {
-            console.error('Failed to save rating:', error);
-            showSnackbar('Failed to save rating', 'warning');
-        }
-    };
-
-    const showSnackbar = (message: string, severity: 'success' | 'warning') => {
+const showSnackbar = (message: string, severity: 'success' | 'warning') => {
         setSnackbar({
             open: true,
             message,
@@ -246,6 +237,28 @@ export default function EventsList() {
     if (isLoading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>
     }
+    
+
+    // state to remove the event
+    
+    const handleDelete = async (eventId: number) => {
+        setDeletingId(eventId);
+        try {
+            await client.delete(`/events/${eventId}`);
+            // 3. THIS IS THE MAGICAL PART (Instant Update)
+            // It manually filters the event out of the list so it vanishes instantly
+            queryClient.setQueryData(['events'], (oldEvents: Event[] | undefined) => {
+                return oldEvents ? oldEvents.filter(e => e.id !== eventId) : [];
+            });
+            // Optional: Double check with server
+            queryClient.invalidateQueries({ queryKey: ['events'] });
+        } catch (error) {
+            console.error("Error deleting:", error);
+            alert("Failed to delete event");
+        } finally {
+            setDeletingId(null);
+        }
+    };
 
     return (
         <Box>
@@ -260,16 +273,18 @@ export default function EventsList() {
                 </Button>
             </Box>
 
-            <Grid container spacing={3}>
+            <Grid container spacing={3} >
                 {events?.map((event) => {
+                    // old events can't register to them any more
+                    const isEventOver = new Date(event.startTime) < new Date();
                     // Check if this specific event is registered
                     const isRegistered = !!registeredEvents[event.id];
-                    const rateValue = eventRatings[event.id] || 0;
+                    
                     
                     return (
-                        <Grid size={{ xs: 12, md: 6, lg: 4 }} key={event.id}>
-                            <Card sx={{display:'flex', maxWidth:'600px'}} >
-                                <CardMedia component="div" sx={{  backgroundColor:'gold',width:'140px',display: 'flex',flexDirection: 'column',justifyContent: 'center',p: 2.5,textAlign: 'center' }}>
+                        <Grid size="auto" key={event.id}>
+                            <Card sx={{display:'flex', maxWidth:'620px'}} >
+                                <CardMedia component="div" sx={{  backgroundColor:'gold',width:'120px',display: 'flex',flexDirection: 'column',justifyContent: 'center',p: 2.5,textAlign: 'center' }}>
                                     <Typography variant="h4" sx={{ fontWeight: 700,textTransform: 'uppercase' }}>
                                         {format(new Date(event.startTime), 'dd MMM yyyy')}
                                     </Typography>
@@ -277,8 +292,9 @@ export default function EventsList() {
                                         {format(new Date(event.startTime), 'HH:mm')}
                                     </Typography>
                                 </CardMedia>
-                                <CardContent sx={{ flex: 1, p: { xs: 2, sm: 3 } }}>
+                                <CardContent >
                                     <Box sx={{display: 'flex',gap: 2,alignItems: 'center', marginBottom:'15px'}}>
+
                                         {event.team?.name && (
                                             <Tooltip title={event.team.name}>
                                                 <Chip avatar={<Avatar 
@@ -301,8 +317,10 @@ export default function EventsList() {
                                             {event.title}
                                         </Typography>
                                         <Chip label={event.type} sx={{backgroundColor:event.type === 'offline' ? '#EC4899' :'#818CF8', color:'white', fontWeight:550}}/>
+                                        {/** Delete button for user and Admins */}
+                                        {(event.team?.leaderId == user?.id || user?.roles?.global === 'admin') &&       <Button variant="outlined" color="error" size='small'  onClick={() => handleDelete(event.id)}>Delete</Button> }
+                                        
                                     </Box>
-                                    
                                     <Typography variant='h6'>Price: {event.basePrice}</Typography>
                                     
                                     <Divider sx={{marginBottom:'15px'}}/>
@@ -326,8 +344,8 @@ export default function EventsList() {
                                     </Accordion>
                                     
                                     {/* Each button uses the event-specific isRegistered state */}
-                                <Box display={'flex'} justifyContent={'space-between'}>
-                                    <Button 
+                                <Box display={'flex'} justifyContent={'space-between'} sx={{alignItems:'center', mb:2}}>
+                                    {isEventOver == false  && <Button 
                                         variant={isRegistered ? "outlined" : "contained"}
                                         color={isRegistered ? "error" : "primary"}
                                         endIcon={isRegistered ? <CancelIcon /> : <HowToRegIcon />}
@@ -339,12 +357,12 @@ export default function EventsList() {
                                         }}
                                     >
                                         {isRegistered ? "Cancel" : "Register"}
-                                    </Button>
-                                    
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 2 }}>
-                                            
-                                    </Box>
+                                    </Button>}
+                                    { isRegistered && <ShowQRButton value={ JSON.stringify({eventId : event.id , studentId: user.id}) } /> }
+                
                                 </Box>
+
+                                { isRegistered == true && isEventOver == true &&<RateEvent eventId={event.id}/>}
                                 </CardContent>
                                 <CardActions>
                                     {/* Optional actions */}
@@ -361,76 +379,12 @@ export default function EventsList() {
                 )}
             </Grid>
 
-            {/* Create Event Dialog */}
-            <Dialog open={openCreate} onClose={() => setOpenCreate(false)}>
-                <DialogTitle>Create New Event</DialogTitle>
-                <DialogContent>
-                    <TextField
-                        margin="dense"
-                        label="Title"
-                        fullWidth
-                        {...register('title')}
-                        error={!!errors.title}
-                        helperText={errors.title?.message}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="Type"
-                        fullWidth
-                        {...register('type')}
-                        error={!!errors.type}
-                        helperText={errors.type?.message}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="Team ID"
-                        type="number"
-                        fullWidth
-                        {...register('teamId')}
-                        error={!!errors.teamId}
-                        helperText={errors.teamId?.message}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="Start Time"
-                        type="datetime-local"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        {...register('startTime')}
-                        error={!!errors.startTime}
-                        helperText={errors.startTime?.message}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="End Time"
-                        type="datetime-local"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        {...register('endTime')}
-                        error={!!errors.endTime}
-                        helperText={errors.endTime?.message}
-                    />
-                    <TextField
-                        margin="dense"
-                        label="Description"
-                        fullWidth
-                        multiline
-                        rows={3}
-                        {...register('description')}
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpenCreate(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit(handleCreate)} variant="contained" disabled={createMutation.isPending}>
-                        Create
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={6000}
                 onClose={handleCloseSnackbar}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
             >
                 <Alert 
                     onClose={handleCloseSnackbar} 
@@ -540,6 +494,74 @@ function EventRoom({ eventId }: RoomDisplayProps) {
         <Box sx={{ mt: 1 }}>
             <Typography variant='body2'>Location: <span style={{fontWeight:'bold'}}>{room.location}</span></Typography>
             <Typography variant='body2'>Room: <span style={{fontWeight:'bold'}}>{room.name}</span></Typography>
+        </Box>
+    );
+}
+
+function RateEvent({ eventId }: { eventId: number }) {
+    const [rating, setRating] = useState<number | null>(0);
+    const [feedback, setFeedback] = useState("");
+    const [submitted, setSubmitted] = useState(false);
+
+    // FETCH EXISTING RATING
+    useQuery({
+        queryKey: ['my-ticket', eventId],
+        queryFn: async () => {
+            try {
+                // I fixed this route for you in the backend!
+                const res = await client.get(`/tickets/event/${eventId}`);
+                const ticket = res.data.ticket;
+                
+                if (ticket && ticket.rating) {
+                    setRating(ticket.rating);
+                    setFeedback(ticket.feedback || "");
+                    setSubmitted(true); // Don't allow double rating if you want
+                }
+                return ticket;
+            } catch (e) {
+                return null; // No ticket found
+            }
+        },
+        retry: false
+    });
+
+    const handleSubmit = async () => {
+        if (!rating) return alert("Please select a star rating");
+        
+        try {
+            await client.post('/tickets/rate', {
+                eventId: eventId,
+                rating: rating,
+                feedback: feedback
+            });
+            setSubmitted(true);
+            alert("Thanks for your feedback!");
+        } catch (error: any) {
+            console.error(error);
+            alert(error.response?.data?.error || "Failed to submit");
+        }
+    };
+
+    return (
+        <Box sx={{ display: 'flex', mt: 2, alignItems: 'center', gap: 3 }}>
+            <Rating
+                value={rating}
+                onChange={(event, newValue) => setRating(newValue)}
+                readOnly={submitted} // Make it read-only if they already rated
+            />
+            {!submitted && (
+                <>
+                    <TextField 
+                        label="Feedback" 
+                        variant="standard" 
+                        size='small' 
+                        value={feedback}
+                        onChange={(e) => setFeedback(e.target.value)}
+                    />
+                    <Button size="small" onClick={handleSubmit}>Submit</Button>
+                </>
+            )}
+            {submitted && <Typography variant="caption" color="success.main">Thanks for rating!</Typography>}
         </Box>
     );
 }

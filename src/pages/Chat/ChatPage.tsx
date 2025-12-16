@@ -446,7 +446,7 @@ export default function ChatPage() {
                         color: "text.secondary",
                       }}
                     >
-                      {c.lastMessage}
+                      {!c.isSystem&&(c.lastMessage)}
                     </Typography>
                   }
                 />
@@ -491,7 +491,7 @@ export default function ChatPage() {
                         <Paper
                           sx={{
                             p: 2,
-                            bgcolor: "warning.light",
+                            bgcolor: "#FFEB3B",
                             color: "text.primary",
                             borderRadius: 2,
                           }}

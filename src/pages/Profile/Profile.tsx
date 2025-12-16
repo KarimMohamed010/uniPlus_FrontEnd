@@ -136,9 +136,9 @@ export default function Profile() {
       });
       setShowPasswordForm(false);
       setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (error) {
+    } catch (error : any) {
       console.error("Failed to change password:", error);
-      setPasswordError("Failed to change password. Please try again.");
+      setPasswordError("Failed to change password. " + error.response?.data?.error || "");
       setTimeout(() => setPasswordError(""), 3000);
 
     } finally {
@@ -468,7 +468,7 @@ export default function Profile() {
                       value={passwordData.newPassword}
                       onChange={handlePasswordInputChange}
                       disabled={isLoading}
-                      helperText="Minimum 8 characters"
+                      helperText="Minimum 6 characters"
                       InputProps={{
                         endAdornment: (
                           <InputAdornment position="end">
