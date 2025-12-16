@@ -95,12 +95,13 @@ export default function EventsList() {
     const { user } = useAuth();
     // STATE TO TRACK REGISTRATION FOR EACH EVENT
     const [registeredEvents, setRegisteredEvents] = useState<Record<number, boolean>>({});
-    
+    const [deletingId, setDeletingId] = useState<number | null>(null);
 
     const { data: events, isLoading } = useQuery<Event[]>({
         queryKey: ['events'],
         queryFn: async () => {
             const res = await client.get('/events');
+            
             return res.data.events;
         }
     });
@@ -234,7 +235,7 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
     
 
     // state to remove the event
-    const [deletingId, setDeletingId] = useState<number | null>(null);
+    
     const handleDelete = async (eventId: number) => {
   setDeletingId(eventId); 
   try {
