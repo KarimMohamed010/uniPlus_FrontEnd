@@ -27,7 +27,8 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import { useAuth  } from '../../context/AuthContext';
-
+import Rating from '@mui/material/Rating';
+import TextField from '@mui/material/TextField';
 
 
 function stringToColor(string: string) {
@@ -96,6 +97,9 @@ export default function EventsList() {
     // STATE TO TRACK REGISTRATION FOR EACH EVENT
     const [registeredEvents, setRegisteredEvents] = useState<Record<number, boolean>>({});
     const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [value, setValue] = React.useState<number | null>();
+
+    const queryClient = useQueryClient(); 
 
     const { data: events, isLoading } = useQuery<Event[]>({
         queryKey: ['events'],
@@ -237,16 +241,24 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
     // state to remove the event
     
     const handleDelete = async (eventId: number) => {
-  setDeletingId(eventId); 
-  try {
-    await client.delete(`/events/${eventId}`);
-  } catch (error) {
-    console.error("Error deleting:", error);
-    alert("Failed to delete event");
-  } finally {
-    setDeletingId(null);
-  }
-};
+        setDeletingId(eventId);
+        try {
+            await client.delete(`/events/${eventId}`);
+            // 3. THIS IS THE MAGICAL PART (Instant Update)
+            // It manually filters the event out of the list so it vanishes instantly
+            queryClient.setQueryData(['events'], (oldEvents: Event[] | undefined) => {
+                return oldEvents ? oldEvents.filter(e => e.id !== eventId) : [];
+            });
+            // Optional: Double check with server
+            queryClient.invalidateQueries({ queryKey: ['events'] });
+        } catch (error) {
+            console.error("Error deleting:", error);
+            alert("Failed to delete event");
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -262,6 +274,8 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
 
             <Grid container spacing={3} >
                 {events?.map((event) => {
+                    // old events can't register to them any more
+                    const isEventOver = new Date(event.startTime) < new Date();
                     // Check if this specific event is registered
                     const isRegistered = !!registeredEvents[event.id];
                     
@@ -329,8 +343,8 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                     </Accordion>
                                     
                                     {/* Each button uses the event-specific isRegistered state */}
-                                <Box display={'flex'} justifyContent={'space-between'}>
-                                    <Button 
+                                <Box display={'flex'} justifyContent={'space-between'} sx={{alignItems:'center', mb:2}}>
+                                    {isEventOver == false  && <Button 
                                         variant={isRegistered ? "outlined" : "contained"}
                                         color={isRegistered ? "error" : "primary"}
                                         endIcon={isRegistered ? <CancelIcon /> : <HowToRegIcon />}
@@ -342,10 +356,10 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                         }}
                                     >
                                         {isRegistered ? "Cancel" : "Register"}
-                                    </Button>
-                                    
-                                    
+                                    </Button>}
                                 </Box>
+
+                                { isRegistered == true && isEventOver == true &&<RateEvent eventId={event.id}/>}
                                 </CardContent>
                                 <CardActions>
                                     {/* Optional actions */}
@@ -477,6 +491,74 @@ function EventRoom({ eventId }: RoomDisplayProps) {
         <Box sx={{ mt: 1 }}>
             <Typography variant='body2'>Location: <span style={{fontWeight:'bold'}}>{room.location}</span></Typography>
             <Typography variant='body2'>Room: <span style={{fontWeight:'bold'}}>{room.name}</span></Typography>
+        </Box>
+    );
+}
+
+function RateEvent({ eventId }: { eventId: number }) {
+    const [rating, setRating] = useState<number | null>(0);
+    const [feedback, setFeedback] = useState("");
+    const [submitted, setSubmitted] = useState(false);
+
+    // FETCH EXISTING RATING
+    useQuery({
+        queryKey: ['my-ticket', eventId],
+        queryFn: async () => {
+            try {
+                // I fixed this route for you in the backend!
+                const res = await client.get(`/tickets/event/${eventId}`);
+                const ticket = res.data.ticket;
+                
+                if (ticket && ticket.rating) {
+                    setRating(ticket.rating);
+                    setFeedback(ticket.feedback || "");
+                    setSubmitted(true); // Don't allow double rating if you want
+                }
+                return ticket;
+            } catch (e) {
+                return null; // No ticket found
+            }
+        },
+        retry: false
+    });
+
+    const handleSubmit = async () => {
+        if (!rating) return alert("Please select a star rating");
+        
+        try {
+            await client.post('/tickets/rate', {
+                eventId: eventId,
+                rating: rating,
+                feedback: feedback
+            });
+            setSubmitted(true);
+            alert("Thanks for your feedback!");
+        } catch (error: any) {
+            console.error(error);
+            alert(error.response?.data?.error || "Failed to submit");
+        }
+    };
+
+    return (
+        <Box sx={{ display: 'flex', mt: 2, alignItems: 'center', gap: 3 }}>
+            <Rating
+                value={rating}
+                onChange={(event, newValue) => setRating(newValue)}
+                readOnly={submitted} // Make it read-only if they already rated
+            />
+            {!submitted && (
+                <>
+                    <TextField 
+                        label="Feedback" 
+                        variant="standard" 
+                        size='small' 
+                        value={feedback}
+                        onChange={(e) => setFeedback(e.target.value)}
+                    />
+                    <Button size="small" onClick={handleSubmit}>Submit</Button>
+                </>
+            )}
+            {submitted && <Typography variant="caption" color="success.main">Thanks for rating!</Typography>}
         </Box>
     );
 }
