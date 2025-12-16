@@ -9,6 +9,7 @@ import EventsList from "./pages/Events/EventsList";
 import ChatPage from "./pages/Chat/ChatPage";
 import Profile from "./pages/Profile/Profile";
 import AdminDashboard from "./pages/Admin/AdminDashboard";
+import OrganizerDashboard from "./pages/OrganizerDashboard/OrganizerDashboard";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -29,6 +30,7 @@ function App() {
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/student-teams" element={<OrganizerDashboard />} />
           </Route>
         </Route>
 

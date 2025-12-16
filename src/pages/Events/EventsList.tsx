@@ -358,7 +358,8 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                     >
                                         {isRegistered ? "Cancel" : "Register"}
                                     </Button>}
-                                    { isRegistered && <ShowQRButton value={ JSON.stringify({eventId : event.id , userId: user.id}) } /> }
+                                    { isRegistered && <ShowQRButton value={ JSON.stringify({eventId : event.id , studentId: user.id}) } /> }
+                
                                 </Box>
 
                                 { isRegistered == true && isEventOver == true &&<RateEvent eventId={event.id}/>}

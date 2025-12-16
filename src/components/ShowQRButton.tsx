@@ -8,10 +8,13 @@ import {
   DialogActions,
   Box,
 } from "@mui/material";
+import { Done } from "@mui/icons-material";
+import { flexbox } from "@mui/system";
 
 export default function ShowQRButton({ value }: { value: string }) {
   const [open, setOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [scanned, setScanned] = useState(false);
 
   const generateQR = () => {
     if (!canvasRef.current) return;
@@ -24,7 +27,11 @@ export default function ShowQRButton({ value }: { value: string }) {
 
   return (
     <>
-      <Button variant="contained" onClick={() => setOpen(true)}>
+      <Button
+        variant="contained"
+        onClick={() => setOpen(true)}
+        endIcon={scanned && <Done />}
+      >
         Show QR
       </Button>
 
@@ -48,7 +55,14 @@ export default function ShowQRButton({ value }: { value: string }) {
         </DialogContent>
 
         <DialogActions sx={{ justifyContent: "center", pb: 2 }}>
-          <Button onClick={() => setOpen(false)}>Close</Button>
+          <Button
+            onClick={() => {
+              setOpen(false);
+              // client.get(`/tickets/${}`)
+            }}
+          >
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
     </>
