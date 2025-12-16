@@ -97,7 +97,7 @@ export default function EventsList() {
     // STATE TO TRACK REGISTRATION FOR EACH EVENT
     const [registeredEvents, setRegisteredEvents] = useState<Record<number, boolean>>({});
     const [deletingId, setDeletingId] = useState<number | null>(null);
-    const [value, setValue] = React.useState<number | null>();
+    
 
     const queryClient = useQueryClient(); 
 
@@ -523,7 +523,7 @@ function RateEvent({ eventId }: { eventId: number }) {
     });
 
     const handleSubmit = async () => {
-        if (!rating) return alert("Please select a star rating");
+        
         
         try {
             await client.post('/tickets/rate', {
@@ -532,7 +532,7 @@ function RateEvent({ eventId }: { eventId: number }) {
                 feedback: feedback
             });
             setSubmitted(true);
-            alert("Thanks for your feedback!");
+            
         } catch (error: any) {
             console.error(error);
             alert(error.response?.data?.error || "Failed to submit");
