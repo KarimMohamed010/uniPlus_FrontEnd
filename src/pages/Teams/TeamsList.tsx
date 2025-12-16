@@ -27,6 +27,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
 import SearchIcon from "@mui/icons-material/Search";
 
+
 interface Team {
   id: number;
   name: string;
@@ -279,11 +280,9 @@ export default function TeamsList() {
       {/* Create Team Dialog */}
       <Dialog open={openCreate} onClose={() => setOpenCreate(false)}>
         <DialogTitle>Create New Team</DialogTitle>
-        {/* 💡 FIX 1: Wrap dialog content in <form> and connect handleSubmit */}{" "}
+        {/* 💡 FIX 1: Wrap dialog content in <form> and connect handleSubmit */}
         <form onSubmit={handleSubmit(handleCreate)}>
-          {" "}
           <DialogContent>
-            {" "}
             <TextField
               margin="dense"
               label="Team Name"
@@ -291,7 +290,7 @@ export default function TeamsList() {
               {...register("name")}
               error={!!errors.name}
               helperText={errors.name?.message}
-            />{" "}
+            />
             <TextField
               margin="dense"
               label="Description"
@@ -299,17 +298,16 @@ export default function TeamsList() {
               multiline
               rows={3}
               {...register("description")}
-            />{" "}
-          </DialogContent>{" "}
+            />
+          </DialogContent>
           <DialogActions>
-            {" "}
             <Button
               onClick={() => setOpenCreate(false)}
               disabled={createMutation.isPending}
             >
               Cancel
             </Button>
-            {/* 💡 FIX 2: Re-add the Submit button */}{" "}
+            {/* 💡 FIX 2: Re-add the Submit button */}
             <Button
               type="submit"
               variant="contained"
@@ -321,9 +319,9 @@ export default function TeamsList() {
               ) : (
                 "Create"
               )}
-            </Button>{" "}
+            </Button>
           </DialogActions>
-        </form>{" "}
+        </form>
       </Dialog>
     </Box>
   );
