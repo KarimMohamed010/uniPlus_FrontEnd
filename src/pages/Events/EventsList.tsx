@@ -609,7 +609,7 @@ function EventPrice({ eventID ,basePrice = 100 }: {  basePrice?: number, eventID
                         <span style={{ fontSize: 15 }}>EGP</span>
                     </Typography>
                 ) : (
-                    <Typography>
+                    <Typography variant="h6">
                         {basePrice}<span style={{ fontSize: 15 }}>EGP</span>
                     </Typography>
                 )
