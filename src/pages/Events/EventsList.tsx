@@ -9,7 +9,7 @@ import {
     CircularProgress,
     Grid
 } from '@mui/material';
-import ShowQRButton from '../../components/ShowQrButton';
+import ShowQRButton from '../../components/ShowQRButton';
 import { Add } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import client from '../../api/client';
