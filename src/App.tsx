@@ -27,7 +27,7 @@ function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/teams" element={<TeamsList />} />
-            <Route path="/teams/:id" element={<TeamDetails />} />
+            <Route path="/teams/:id" element={<TeamDetails /> } />
             <Route path="/events" element={<EventsList />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/profile" element={<Profile />} />
