@@ -446,7 +446,7 @@ export default function ChatPage() {
                         color: "text.secondary",
                       }}
                     >
-                      {c.lastMessage}
+                      {!c.isSystem&&(c.lastMessage)}
                     </Typography>
                   }
                 />
