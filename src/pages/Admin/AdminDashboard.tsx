@@ -97,6 +97,26 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleGenerateManagerialReport = async () => {
+    try {
+      setIsLoading(true);
+      setError("");
+
+      const response = await client.get("/reports/managerial");
+      setManagerialReport(response.data.data);
+      setSuccessMessage("Managerial report generated successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (error: any) {
+      console.error("Failed to generate managerial report:", error);
+      const errorMessage =
+        error.response?.data?.error ||
+        "Failed to generate managerial report. Please try again.";
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const { user } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -129,6 +149,31 @@ export default function AdminDashboard() {
     date: string;
   }>>([]);
   const [isReportGenerated, setIsReportGenerated] = useState(false);
+
+  const [managerialReport, setManagerialReport] = useState<null | {
+    totalUsers: number;
+    totalStudents: number;
+    totalAdmins: number;
+    totalTeams: number;
+    totalEvents: number;
+    approvedEvents: number;
+    pendingEvents: number;
+    rejectedEvents: number;
+    totalRegistrations: number;
+    uniqueRegistrants: number;
+    totalCheckins: number;
+    checkinRate: number;
+    avgTicketPrice: number;
+    minTicketPrice: number;
+    maxTicketPrice: number;
+    avgRating: number;
+    feedbackCount: number;
+    totalPosts: number;
+    totalComments: number;
+    totalMessages: number;
+    totalRides: number;
+    totalApplications: number;
+  }>(null);
 
   // Behavior Warning States
   const [warningUserId, setWarningUserId] = useState("");
@@ -387,6 +432,7 @@ export default function AdminDashboard() {
             <Tab label="Reports" id="admin-tab-2" />
             <Tab label="Behavior Warnings" id="admin-tab-3" />
             <Tab label="User Management" id="admin-tab-4" />
+            <Tab label="Managerial Reports" id="admin-tab-5" />
           </Tabs>
 
           {/* TAB 0: Event/Organization Approvals */}
@@ -1046,7 +1092,202 @@ export default function AdminDashboard() {
               </TableContainer>
             </Box>
           </TabPanel>
-          <TabPanel value={tabValue} index={5}></TabPanel>
+          <TabPanel value={tabValue} index={5}>
+            <Box>
+              <Typography variant="h6" sx={{ mb: 3 }}>
+                Managerial Reports
+              </Typography>
+
+              {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
+
+              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+                <Typography color="textSecondary">
+                  Overall statistics for the whole application
+                </Typography>
+                <Button
+                  variant="contained"
+                  onClick={handleGenerateManagerialReport}
+                  disabled={isLoading}
+                  startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : undefined}
+                >
+                  {isLoading ? "Generating..." : managerialReport ? "Refresh" : "Generate"}
+                </Button>
+              </Box>
+
+              {managerialReport && (
+                <Grid container spacing={2}>
+                  <Grid key="mgr_totalUsers" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Users</Typography>
+                        <Typography variant="h5">{managerialReport.totalUsers}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalStudents" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Students</Typography>
+                        <Typography variant="h5">{managerialReport.totalStudents}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalAdmins" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Admins</Typography>
+                        <Typography variant="h5">{managerialReport.totalAdmins}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalTeams" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Teams</Typography>
+                        <Typography variant="h5">{managerialReport.totalTeams}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid key="mgr_totalEvents" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Events</Typography>
+                        <Typography variant="h5">{managerialReport.totalEvents}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_approvedEvents" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Approved Events</Typography>
+                        <Typography variant="h5">{managerialReport.approvedEvents}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_pendingEvents" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Pending Events</Typography>
+                        <Typography variant="h5">{managerialReport.pendingEvents}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_rejectedEvents" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Rejected Events</Typography>
+                        <Typography variant="h5">{managerialReport.rejectedEvents}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid key="mgr_totalRegistrations" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Registrations</Typography>
+                        <Typography variant="h5">{managerialReport.totalRegistrations}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalCheckins" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Check-ins</Typography>
+                        <Typography variant="h5">{managerialReport.totalCheckins}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_checkinRate" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Check-in Rate</Typography>
+                        <Typography variant="h5">{managerialReport.checkinRate}%</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_avgRating" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Avg Rating</Typography>
+                        <Typography variant="h5">{managerialReport.avgRating}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid key="mgr_avgTicketPrice" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Avg Ticket Price</Typography>
+                        <Typography variant="h5">{managerialReport.avgTicketPrice}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_minTicketPrice" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Min Ticket Price</Typography>
+                        <Typography variant="h5">{managerialReport.minTicketPrice}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_maxTicketPrice" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Max Ticket Price</Typography>
+                        <Typography variant="h5">{managerialReport.maxTicketPrice}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_feedbackCount" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Feedback Count</Typography>
+                        <Typography variant="h5">{managerialReport.feedbackCount}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid key="mgr_totalPosts" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Posts</Typography>
+                        <Typography variant="h5">{managerialReport.totalPosts}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalComments" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Comments</Typography>
+                        <Typography variant="h5">{managerialReport.totalComments}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalMessages" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Messages</Typography>
+                        <Typography variant="h5">{managerialReport.totalMessages}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalApplications" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Applications</Typography>
+                        <Typography variant="h5">{managerialReport.totalApplications}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              )}
+            </Box>
+          </TabPanel>
         </CardContent>
       </Card>
     </Box>
