@@ -193,7 +193,7 @@ useEffect(() => {
     const handleCancel = async (eventId: number) => {
     try {
         // Call the cancel registration API
-        const response = await client.delete(`/tickets/${eventId}/cancel`);
+        const response = await client.delete(`/events/${eventId}/cancel`);
         
         // Update local state
         setRegisteredEvents(prev => ({
