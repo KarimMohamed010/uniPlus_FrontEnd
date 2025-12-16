@@ -28,6 +28,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import { useAuth  } from '../../context/AuthContext';
+import { useNavigate } from "react-router-dom";
 import Rating from '@mui/material/Rating';
 import TextField from '@mui/material/TextField';
 
@@ -101,6 +102,8 @@ export default function EventsList() {
     
 
     const queryClient = useQueryClient(); 
+
+    const navigate = useNavigate();
 
     const { data: events, isLoading } = useQuery<Event[]>({
         queryKey: ['events'],
@@ -306,7 +309,7 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                                         transition: 'transform 0.2s',
                                                         '&:hover': { transform: 'scale(1.05)' }
                                                     }} 
-                                                /> } label={event.team.name} sx={{fontWeight:550}}/>
+                                                /> } label={event.team.name} sx={{fontWeight:550}} onClick={() => navigate(`/teams/${event.team.id}`)}/>
                                             </Tooltip>
                                         )}
                                         
