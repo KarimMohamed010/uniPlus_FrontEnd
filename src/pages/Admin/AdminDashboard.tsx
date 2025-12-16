@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Card,
@@ -22,10 +22,9 @@ import {
   Grid,
   Alert,
   CircularProgress,
-  InputAdornment,
   Container,
 } from "@mui/material";
-import { Download, Search, Warning } from "@mui/icons-material";
+import { Download } from "@mui/icons-material";
 import { useAuth } from "../../context/AuthContext";
 import client from "../../api/client";
 import { useForm } from "react-hook-form";
@@ -124,16 +123,24 @@ export default function AdminDashboard() {
 
   // Event/Organization Approval States
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
-  const [approvalReason, setApprovalReason] = useState("");
-  const [pendingApprovals] = useState<
+  const [pendingApprovals, setPendingApprovals] = useState<
     Array<{
       id: string;
       name: string;
-      type: string;
+      type: "event" | "team";
       submittedBy: string;
-      date: string;
+      date: string | null;
     }>
   >([]);
+  const [selectedApprovalItem, setSelectedApprovalItem] = useState<null | {
+    id: string;
+    name: string;
+    type: "event" | "team";
+    submittedBy: string;
+    date: string | null;
+  }>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [approvalItemDetails, setApprovalItemDetails] = useState<any>(null);
 
   // Reports States
   const [reportType, setReportType] = useState<"participation" | "engagement">("participation");
@@ -174,32 +181,6 @@ export default function AdminDashboard() {
     totalRides: number;
     totalApplications: number;
   }>(null);
-
-  // Behavior Warning States
-  const [warningUserId, setWarningUserId] = useState("");
-  const [warningReason, setWarningReason] = useState("");
-  const [recentWarnings] = useState<
-    Array<{
-      id: string | number;
-      user: string;
-      reason: string;
-      issuedDate: string;
-      status: string;
-    }>
-  >([]);
-
-  // User Management States
-  const [userSearchQuery, setUserSearchQuery] = useState("");
-  const [users] = useState<
-    Array<{
-      id: string | number;
-      name: string;
-      username: string;
-      email: string;
-      role: string;
-      status: string;
-    }>
-  >([]);
 
   // Admin List State
   const [adminsList, setAdminsList] = useState<
@@ -242,22 +223,87 @@ export default function AdminDashboard() {
   };
 
   // Handlers for Event/Organization Approval
-  const handleApproveItem = async (itemId: string, approved: boolean) => {
+  const fetchPendingApprovals = async () => {
     try {
       setIsLoading(true);
-      await client.patch(`/admin/approvals/${itemId}`, {
-        approved,
-        reason: approvalReason,
-        itemType: "event",
-      });
+      setError("");
+      const response = await client.get("/admin/approvals/pending");
+      setPendingApprovals(response.data.items || []);
+    } catch (error: any) {
+      console.error("Failed to fetch pending approvals:", error);
+      const errorMessage =
+        error.response?.data?.error || "Failed to fetch pending approvals.";
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tabValue === 0) {
+      fetchPendingApprovals();
+    }
+  }, [tabValue]);
+
+  const handleApproveItem = async (approved: boolean) => {
+    try {
+      if (!selectedApprovalItem) return;
+      setIsLoading(true);
+      await client.patch(
+        `/admin/approvals/${selectedApprovalItem.type}/${selectedApprovalItem.id}`,
+        {
+          approved,
+        }
+      );
       setSuccessMessage(
         `Item ${approved ? "approved" : "rejected"} successfully!`
       );
       setApprovalDialogOpen(false);
-      setApprovalReason("");
+      setSelectedApprovalItem(null);
+      await fetchPendingApprovals();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error) {
       console.error("Failed to process approval:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRemoveApprovalItem = async (item: {
+    id: string;
+    type: "event" | "team";
+  }) => {
+    try {
+      setIsLoading(true);
+      setError("");
+      await client.delete(`/admin/approvals/${item.type}/${item.id}`);
+      setSuccessMessage("Item removed successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+      await fetchPendingApprovals();
+    } catch (error: any) {
+      console.error("Failed to remove item:", error);
+      const errorMessage = error.response?.data?.error || "Failed to remove item.";
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenDetails = async (item: {
+    id: string;
+    type: "event" | "team";
+  }) => {
+    try {
+      setIsLoading(true);
+      setError("");
+      const response = await client.get(`/admin/approvals/${item.type}/${item.id}`);
+      setApprovalItemDetails(response.data);
+      setDetailsDialogOpen(true);
+    } catch (error: any) {
+      console.error("Failed to fetch item details:", error);
+      const errorMessage =
+        error.response?.data?.error || "Failed to fetch item details.";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -361,40 +407,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // Handlers for Behavior Warnings
-  const handleIssueWarning = async () => {
-    if (!warningUserId || !warningReason) return;
-    try {
-      setIsLoading(true);
-      await client.post("/admin/warnings", {
-        userId: warningUserId,
-        reason: warningReason,
-      });
-      setSuccessMessage("Warning issued successfully!");
-      setWarningUserId("");
-      setWarningReason("");
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (error) {
-      console.error("Failed to issue warning:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handlers for User Management
-  const handleToggleUserStatus = async (userId: string | number) => {
-    try {
-      setIsLoading(true);
-      await client.patch(`/admin/users/${userId}/status`);
-      setSuccessMessage("User status updated successfully!");
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (error) {
-      console.error("Failed to update user status:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Handlers for Announcements
   // This handler is available for sending system announcements to all users;;
 
@@ -427,12 +439,10 @@ export default function AdminDashboard() {
             onChange={(e, newValue) => setTabValue(newValue)}
             aria-label="admin tabs"
           >
-            <Tab label="Event/Org Approvals" id="admin-tab-0" />
+            <Tab label="Event/Team Approvals" id="admin-tab-0" />
             <Tab label="Add Admin" id="admin-tab-1" />
             <Tab label="Reports" id="admin-tab-2" />
-            <Tab label="Behavior Warnings" id="admin-tab-3" />
-            <Tab label="User Management" id="admin-tab-4" />
-            <Tab label="Managerial Reports" id="admin-tab-5" />
+            <Tab label="Managerial Reports" id="admin-tab-3" />
           </Tabs>
 
           {/* TAB 0: Event/Organization Approvals */}
@@ -441,6 +451,16 @@ export default function AdminDashboard() {
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Pending Approvals
               </Typography>
+              {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
+              {successMessage && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  {successMessage}
+                </Alert>
+              )}
               <TableContainer component={Paper}>
                 <Table>
                   <TableHead>
@@ -467,13 +487,31 @@ export default function AdminDashboard() {
                           <TableCell>{item.name}</TableCell>
                           <TableCell>{item.type}</TableCell>
                           <TableCell>{item.submittedBy}</TableCell>
-                          <TableCell>{item.date}</TableCell>
+                          <TableCell>
+                            {item.date ? new Date(item.date).toLocaleString() : "-"}
+                          </TableCell>
                           <TableCell>
                             <Button
                               size="small"
-                              onClick={() => setApprovalDialogOpen(true)}
+                              onClick={() => handleOpenDetails(item)}
+                            >
+                              Details
+                            </Button>
+                            <Button
+                              size="small"
+                              onClick={() => {
+                                setSelectedApprovalItem(item);
+                                setApprovalDialogOpen(true);
+                              }}
                             >
                               Review
+                            </Button>
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => handleRemoveApprovalItem(item)}
+                            >
+                              Remove
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -492,37 +530,426 @@ export default function AdminDashboard() {
               >
                 <DialogTitle>Approval Decision</DialogTitle>
                 <DialogContent sx={{ pt: 2 }}>
-                  <TextField
-                    fullWidth
-                    label="Reason (Optional)"
-                    value={approvalReason}
-                    onChange={(e) => setApprovalReason(e.target.value)}
-                    multiline
-                    rows={4}
-                    placeholder="Add a reason for approval or rejection..."
-                  />
+                  <Typography variant="body1" sx={{ mb: 1 }}>
+                    {selectedApprovalItem
+                      ? `Do you want to approve or reject this ${selectedApprovalItem.type}?`
+                      : "Do you want to approve or reject this item?"}
+                  </Typography>
+                  {selectedApprovalItem && (
+                    <Box sx={{ p: 2, borderRadius: 2, backgroundColor: "rgba(0,0,0,0.04)" }}>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {selectedApprovalItem.name}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Submitted by: {selectedApprovalItem.submittedBy}
+                      </Typography>
+                    </Box>
+                  )}
                 </DialogContent>
                 <DialogActions>
                   <Button
-                    onClick={() => setApprovalDialogOpen(false)}
+                    onClick={() => {
+                      setApprovalDialogOpen(false);
+                      setSelectedApprovalItem(null);
+                    }}
                     disabled={isLoading}
                   >
                     Cancel
                   </Button>
                   <Button
-                    onClick={() => handleApproveItem("1", false)}
+                    onClick={() => handleApproveItem(false)}
                     color="error"
                     disabled={isLoading}
                   >
                     Reject
                   </Button>
                   <Button
-                    onClick={() => handleApproveItem("1", true)}
+                    onClick={() => handleApproveItem(true)}
                     color="success"
                     variant="contained"
                     disabled={isLoading}
                   >
                     {isLoading ? <CircularProgress size={20} /> : "Approve"}
+                  </Button>
+                </DialogActions>
+              </Dialog>
+
+              <Dialog
+                open={detailsDialogOpen}
+                onClose={() => {
+                  setDetailsDialogOpen(false);
+                  setApprovalItemDetails(null);
+                }}
+                maxWidth="md"
+                fullWidth
+              >
+                <DialogTitle>Item Details</DialogTitle>
+                <DialogContent sx={{ pt: 2 }}>
+                  {!approvalItemDetails ? (
+                    <Typography color="textSecondary">No details</Typography>
+                  ) : approvalItemDetails.event ? (
+                    <Box>
+                      <Card sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            {approvalItemDetails.event.title}
+                          </Typography>
+                          <Grid container spacing={2}>
+                            <Grid key="ev_meta_1" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Type
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.type || "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="ev_meta_2" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Status
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.acceptanceStatus || "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="ev_meta_3" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Start
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.startTime
+                                  ? new Date(approvalItemDetails.event.startTime).toLocaleString()
+                                  : "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="ev_meta_4" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                End
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.endTime
+                                  ? new Date(approvalItemDetails.event.endTime).toLocaleString()
+                                  : "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="ev_meta_5" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Team
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.team?.name || "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="ev_meta_6" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Team Leader
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.teamLeader
+                                  ? `${approvalItemDetails.event.teamLeader.fname} ${approvalItemDetails.event.teamLeader.lname}`
+                                  : "-"}
+                              </Typography>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+
+                      {approvalItemDetails.stats && (
+                        <Grid container spacing={2} sx={{ mb: 2 }}>
+                          <Grid key="ev_stat_1" size={{ xs: 12, sm: 6, md: 3 }}>
+                            <Card>
+                              <CardContent>
+                                <Typography color="textSecondary">Registrations</Typography>
+                                <Typography variant="h5">
+                                  {approvalItemDetails.stats.totalRegistrations ?? 0}
+                                </Typography>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                          <Grid key="ev_stat_2" size={{ xs: 12, sm: 6, md: 3 }}>
+                            <Card>
+                              <CardContent>
+                                <Typography color="textSecondary">Check-ins</Typography>
+                                <Typography variant="h5">
+                                  {approvalItemDetails.stats.totalCheckins ?? 0}
+                                </Typography>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                          <Grid key="ev_stat_3" size={{ xs: 12, sm: 6, md: 3 }}>
+                            <Card>
+                              <CardContent>
+                                <Typography color="textSecondary">Avg Rating</Typography>
+                                <Typography variant="h5">
+                                  {approvalItemDetails.stats.avgRating ?? 0}
+                                </Typography>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                          <Grid key="ev_stat_4" size={{ xs: 12, sm: 6, md: 3 }}>
+                            <Card>
+                              <CardContent>
+                                <Typography color="textSecondary">Feedback</Typography>
+                                <Typography variant="h5">
+                                  {approvalItemDetails.stats.feedbackCount ?? 0}
+                                </Typography>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                        </Grid>
+                      )}
+
+                      {approvalItemDetails.room && (
+                        <Card sx={{ mb: 2 }}>
+                          <CardContent>
+                            <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                              Room
+                            </Typography>
+                            <Grid container spacing={2}>
+                              <Grid key="room_1" size={{ xs: 12, sm: 6 }}>
+                                <Typography variant="body2" color="textSecondary">
+                                  Name
+                                </Typography>
+                                <Typography>{approvalItemDetails.room.name}</Typography>
+                              </Grid>
+                              <Grid key="room_2" size={{ xs: 12, sm: 3 }}>
+                                <Typography variant="body2" color="textSecondary">
+                                  Capacity
+                                </Typography>
+                                <Typography>{approvalItemDetails.room.capacity}</Typography>
+                              </Grid>
+                              <Grid key="room_3" size={{ xs: 12, sm: 3 }}>
+                                <Typography variant="body2" color="textSecondary">
+                                  Location
+                                </Typography>
+                                <Typography>{approvalItemDetails.room.location}</Typography>
+                              </Grid>
+                            </Grid>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {Array.isArray(approvalItemDetails.speakers) && (
+                        <Card sx={{ mb: 2 }}>
+                          <CardContent>
+                            <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                              Speakers
+                            </Typography>
+                            <TableContainer component={Paper}>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Name</TableCell>
+                                    <TableCell>Email</TableCell>
+                                    <TableCell>Contact</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {approvalItemDetails.speakers.length === 0 ? (
+                                    <TableRow>
+                                      <TableCell colSpan={3} align="center">
+                                        <Typography color="textSecondary">No speakers</Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : (
+                                    approvalItemDetails.speakers.map((s: any) => (
+                                      <TableRow key={s.id}>
+                                        <TableCell>{s.name || `${s.fname || ""} ${s.lname || ""}`}</TableCell>
+                                        <TableCell>{s.email || "-"}</TableCell>
+                                        <TableCell>{s.contact || "-"}</TableCell>
+                                      </TableRow>
+                                    ))
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {Array.isArray(approvalItemDetails.registrations) && (
+                        <Card>
+                          <CardContent>
+                            <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                              Registrations
+                            </Typography>
+                            <TableContainer component={Paper}>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Student</TableCell>
+                                    <TableCell>Email</TableCell>
+                                    <TableCell>Price</TableCell>
+                                    <TableCell>Checked In</TableCell>
+                                    <TableCell>Rating</TableCell>
+                                    <TableCell>Date</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {approvalItemDetails.registrations.length === 0 ? (
+                                    <TableRow>
+                                      <TableCell colSpan={6} align="center">
+                                        <Typography color="textSecondary">No registrations</Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : (
+                                    approvalItemDetails.registrations.map((r: any) => (
+                                      <TableRow key={`${r.studentId}-${r.dateIssued}`}
+                                        >
+                                        <TableCell>{r.studentName || r.studentId}</TableCell>
+                                        <TableCell>{r.email || "-"}</TableCell>
+                                        <TableCell>{r.price ?? "-"}</TableCell>
+                                        <TableCell>{r.scanned ? "Yes" : "No"}</TableCell>
+                                        <TableCell>{r.rating ?? "-"}</TableCell>
+                                        <TableCell>
+                                          {r.dateIssued ? new Date(r.dateIssued).toLocaleString() : "-"}
+                                        </TableCell>
+                                      </TableRow>
+                                    ))
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </Box>
+                  ) : approvalItemDetails.team ? (
+                    <Box>
+                      <Card sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            {approvalItemDetails.team.name}
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                            {approvalItemDetails.team.description || "No description"}
+                          </Typography>
+                          <Grid container spacing={2}>
+                            <Grid key="team_meta_1" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Status
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.team.acceptanceStatus || "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="team_meta_2" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Subscribers
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.subscribers ?? 0}
+                              </Typography>
+                            </Grid>
+                            <Grid key="team_meta_3" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Leader
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.team.leader
+                                  ? `${approvalItemDetails.team.leader.fname} ${approvalItemDetails.team.leader.lname}`
+                                  : "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="team_meta_4" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Leader Email
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.team.leader?.email || "-"}
+                              </Typography>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+
+                      <Card sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            Members
+                          </Typography>
+                          <TableContainer component={Paper}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Name</TableCell>
+                                  <TableCell>Email</TableCell>
+                                  <TableCell>Role</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {!Array.isArray(approvalItemDetails.members) ||
+                                approvalItemDetails.members.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={3} align="center">
+                                      <Typography color="textSecondary">No members</Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ) : (
+                                  approvalItemDetails.members.map((m: any) => (
+                                    <TableRow key={`${m.studentId}-${m.role}`}>
+                                      <TableCell>{`${m.fname || ""} ${m.lname || ""}`}</TableCell>
+                                      <TableCell>{m.email || "-"}</TableCell>
+                                      <TableCell>{m.role || "-"}</TableCell>
+                                    </TableRow>
+                                  ))
+                                )}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardContent>
+                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            Team Events
+                          </Typography>
+                          <TableContainer component={Paper}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Title</TableCell>
+                                  <TableCell>Start</TableCell>
+                                  <TableCell>Status</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {!Array.isArray(approvalItemDetails.events) ||
+                                approvalItemDetails.events.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={3} align="center">
+                                      <Typography color="textSecondary">No events</Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ) : (
+                                  approvalItemDetails.events.map((e: any) => (
+                                    <TableRow key={e.id}>
+                                      <TableCell>{e.title || "-"}</TableCell>
+                                      <TableCell>
+                                        {e.startTime ? new Date(e.startTime).toLocaleString() : "-"}
+                                      </TableCell>
+                                      <TableCell>{e.acceptanceStatus || "-"}</TableCell>
+                                    </TableRow>
+                                  ))
+                                )}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </CardContent>
+                      </Card>
+                    </Box>
+                  ) : (
+                    <Typography color="textSecondary">Unknown details format</Typography>
+                  )}
+                </DialogContent>
+                <DialogActions>
+                  <Button
+                    onClick={() => {
+                      setDetailsDialogOpen(false);
+                      setApprovalItemDetails(null);
+                    }}
+                  >
+                    Close
                   </Button>
                 </DialogActions>
               </Dialog>
@@ -939,160 +1366,7 @@ export default function AdminDashboard() {
             </Box>
           </TabPanel>
 
-          {/* TAB 3: Behavior Warnings */}
           <TabPanel value={tabValue} index={3}>
-            <Box>
-              <Typography variant="h6" sx={{ mb: 3 }}>
-                Issue Behavior Warning
-              </Typography>
-
-              <Card sx={{ mb: 3, p: 2 }}>
-                <Grid container spacing={2}>
-                  <Grid key="warningUserId" size={{ xs: 12 }}>
-                    <TextField
-                      fullWidth
-                      label="User ID or Username"
-                      placeholder="Enter user ID or username"
-                      value={warningUserId}
-                      onChange={(e) => setWarningUserId(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </Grid>
-                  <Grid key="warningReason" size={{ xs: 12 }}>
-                    <TextField
-                      fullWidth
-                      label="Warning Reason"
-                      placeholder="Describe the reason for this warning"
-                      value={warningReason}
-                      onChange={(e) => setWarningReason(e.target.value)}
-                      multiline
-                      rows={4}
-                      disabled={isLoading}
-                    />
-                  </Grid>
-                  <Grid key="warningBtn" size={{ xs: 12 }}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      color="warning"
-                      onClick={handleIssueWarning}
-                      disabled={isLoading || !warningUserId || !warningReason}
-                      startIcon={
-                        isLoading ? <CircularProgress size={20} /> : <Warning />
-                      }
-                    >
-                      {isLoading ? "Issuing..." : "Issue Warning"}
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Card>
-
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Recent Warnings
-              </Typography>
-              <TableContainer component={Paper}>
-                <Table>
-                  <TableHead>
-                    <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                      <TableCell>User</TableCell>
-                      <TableCell>Reason</TableCell>
-                      <TableCell>Issued Date</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {recentWarnings.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                          <Typography color="textSecondary">
-                            No warnings issued
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      recentWarnings.map((warning) => (
-                        <TableRow key={warning.id}>
-                          <TableCell>{warning.user}</TableCell>
-                          <TableCell>{warning.reason}</TableCell>
-                          <TableCell>{warning.issuedDate}</TableCell>
-                          <TableCell>{warning.status}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          </TabPanel>
-
-          {/* TAB 4: User Management */}
-          <TabPanel value={tabValue} index={4}>
-            <Box>
-              <Typography variant="h6" sx={{ mb: 3 }}>
-                User Management
-              </Typography>
-
-              <TextField
-                fullWidth
-                placeholder="Search users by name, username, or email..."
-                value={userSearchQuery}
-                onChange={(e) => setUserSearchQuery(e.target.value)}
-                sx={{ mb: 3 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-
-              <TableContainer component={Paper}>
-                <Table>
-                  <TableHead>
-                    <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Username</TableCell>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Role</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {users.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                          <Typography color="textSecondary">
-                            No users to display
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      users.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell>{user.name}</TableCell>
-                          <TableCell>{user.username}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>{user.role}</TableCell>
-                          <TableCell>{user.status}</TableCell>
-                          <TableCell>
-                            <Button
-                              size="small"
-                              onClick={() => handleToggleUserStatus(user.id)}
-                            >
-                              Update
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          </TabPanel>
-          <TabPanel value={tabValue} index={5}>
             <Box>
               <Typography variant="h6" sx={{ mb: 3 }}>
                 Managerial Reports
