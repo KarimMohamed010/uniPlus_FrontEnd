@@ -31,12 +31,12 @@ import {
   AccountCircle,
   AdminPanelSettings as AdminIcon,
   Notifications,
+  Camera,
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
-import Badge from '@mui/material/Badge';
-import { format } from 'date-fns';
-import type { justifyContent } from "@mui/system";
+import Badge from "@mui/material/Badge";
+import { format } from "date-fns";
 
 const drawerWidth = 240;
 
@@ -48,8 +48,10 @@ export default function Layout() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  const [profileAnchorEl, setProfileAnchorEl] = React.useState<null | HTMLElement>(null);
-  const [notificationAnchorEl, setNotificationAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [profileAnchorEl, setProfileAnchorEl] =
+    React.useState<null | HTMLElement>(null);
+  const [notificationAnchorEl, setNotificationAnchorEl] =
+    React.useState<null | HTMLElement>(null);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -85,18 +87,19 @@ export default function Layout() {
     ...(user?.roles.global === "admin"
       ? [{ text: "Admin", icon: <AdminIcon />, path: "/admin" }]
       : []),
+    ...(user?.roles.global === "student" && user?.roles.team?.length > 0
+      ? [{ text: "Organizers Dashboard", icon: <Camera />, path: "/student-teams" }]
+      : []),
   ];
 
   const drawer = (
     <div>
-      <Toolbar sx={{ justifyContent: 'center' }}>
+      <Toolbar sx={{ justifyContent: "center" }}>
         <Typography
           variant="h6"
           noWrap
           component="div"
-          sx={{ fontWeight: "bold", color: "primary.main" }
-        }
-
+          sx={{ fontWeight: "bold", color: "primary.main" }}
         >
           Uni+
         </Typography>
@@ -172,7 +175,7 @@ export default function Layout() {
               open={Boolean(notificationAnchorEl)}
               onClose={handleNotificationClose}
               PaperProps={{
-                sx: { width: 360, maxHeight: 400 }
+                sx: { width: 360, maxHeight: 400 },
               }}
             >
               {unreadMessages.length > 0 ? (
@@ -181,10 +184,12 @@ export default function Layout() {
                     <MenuItem
                       key={msg.msgId}
                       onClick={() => {
-                        navigate("/chat", { state: { activeChatId: msg.senderId } });
+                        navigate("/chat", {
+                          state: { activeChatId: msg.senderId },
+                        });
                         handleNotificationClose();
                       }}
-                      sx={{ whiteSpace: 'normal', py: 1.5 }}
+                      sx={{ whiteSpace: "normal", py: 1.5 }}
                     >
                       <ListItemAvatar>
                         <Avatar src={msg.senderImgUrl}>
@@ -199,17 +204,17 @@ export default function Layout() {
                           variant="body2"
                           color="text.secondary"
                           sx={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            display: '-webkit-box',
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            display: "-webkit-box",
                             WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
+                            WebkitBoxOrient: "vertical",
                           }}
                         >
                           {msg.content}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {format(new Date(msg.sentAt), 'MMM d, h:mm a')}
+                          {format(new Date(msg.sentAt), "MMM d, h:mm a")}
                         </Typography>
                       </Box>
                     </MenuItem>
@@ -220,7 +225,7 @@ export default function Layout() {
                       navigate("/chat");
                       handleNotificationClose();
                     }}
-                    sx={{ justifyContent: 'center', color: 'primary.main' }}
+                    sx={{ justifyContent: "center", color: "primary.main" }}
                   >
                     View All Messages
                   </MenuItem>
