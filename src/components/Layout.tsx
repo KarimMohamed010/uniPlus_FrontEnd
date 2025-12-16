@@ -37,6 +37,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import Badge from "@mui/material/Badge";
 import { format } from "date-fns";
+import UserSearch from "./UserSearch";
 
 const drawerWidth = 240;
 
@@ -52,6 +53,8 @@ export default function Layout() {
     React.useState<null | HTMLElement>(null);
   const [notificationAnchorEl, setNotificationAnchorEl] =
     React.useState<null | HTMLElement>(null);
+
+  const [customTitle, setCustomTitle] = React.useState<string | null>(null);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -156,9 +159,12 @@ export default function Layout() {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {navItems.find((i) => i.path === location.pathname)?.text ||
+            {customTitle || navItems.find((i) => i.path === location.pathname)?.text ||
               "UniConnect"}
           </Typography>
+
+          <UserSearch />
+
           <div>
             <IconButton
               size="large"
@@ -331,7 +337,7 @@ export default function Layout() {
         }}
       >
         <Toolbar />
-        <Outlet />
+        <Outlet context={{ setCustomTitle }} />
       </Box>
     </Box>
   );
