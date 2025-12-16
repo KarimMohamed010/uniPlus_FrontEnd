@@ -36,6 +36,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import Badge from '@mui/material/Badge';
 import { format } from 'date-fns';
+import type { justifyContent } from "@mui/system";
 
 const drawerWidth = 240;
 
@@ -88,12 +89,14 @@ export default function Layout() {
 
   const drawer = (
     <div>
-      <Toolbar>
+      <Toolbar sx={{ justifyContent: 'center' }}>
         <Typography
           variant="h6"
           noWrap
           component="div"
-          sx={{ fontWeight: "bold", color: "primary.main" }}
+          sx={{ fontWeight: "bold", color: "primary.main" }
+        }
+
         >
           Uni+
         </Typography>
