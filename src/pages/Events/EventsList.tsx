@@ -9,7 +9,7 @@ import {
     CircularProgress,
     Grid
 } from '@mui/material';
-import ShowQRButton from '../../components/ShowQrButton';
+import ShowQRButton from '../../components/ShowQRButton';
 import { Add } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import client from '../../api/client';
@@ -114,7 +114,6 @@ export default function EventsList() {
         }
     });
 
-
 interface RegisteredEvent {
         eventId: number;
         event: {
@@ -163,7 +162,6 @@ useEffect(() => {
     // HANDLE REGISTRATION FOR A SPECIFIC EVENT
     const handleRegister = async (eventId: number) => {
     try {
-        // Call the registration API
         const response = await client.post('/tickets/register', {
             eventId: eventId,
             // studentId should come from auth context/token
@@ -324,8 +322,8 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                         {(event.team?.leaderId == user?.id || user?.roles?.global === 'admin') &&       <Button variant="outlined" color="error" size='small'  onClick={() => handleDelete(event.id)}>Delete</Button> }
                                         
                                     </Box>
-                                    <Typography variant='h6'>Price: {event.basePrice}</Typography>
-                                    
+                                    {/**Here where I should put the price */}
+                                    <EventPrice basePrice={event.basePrice} eventID={event.id}/>
                                     <Divider sx={{marginBottom:'15px'}}/>
                                     
                                     <Accordion sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
@@ -361,9 +359,9 @@ const showSnackbar = (message: string, severity: 'success' | 'warning') => {
                                     >
                                         {isRegistered ? "Cancel" : "Register"}
                                     </Button>}
-                                    { isRegistered && <ShowQRButton value={ JSON.stringify({eventId : event.id , studentId: user.id}) } /> }
                 
                                 </Box>
+                                    { isRegistered && <ShowQRButton value={ JSON.stringify({eventId : event.id , studentId: user?.id}) } /> }
 
                                 { isRegistered == true && isEventOver == true &&<RateEvent eventId={event.id}/>}
                                 </CardContent>
@@ -511,14 +509,14 @@ function RateEvent({ eventId }: { eventId: number }) {
         queryKey: ['my-ticket', eventId],
         queryFn: async () => {
             try {
-                // I fixed this route for you in the backend!
+                
                 const res = await client.get(`/tickets/event/${eventId}`);
                 const ticket = res.data.ticket;
                 
                 if (ticket && ticket.rating) {
                     setRating(ticket.rating);
                     setFeedback(ticket.feedback || "");
-                    setSubmitted(true); // Don't allow double rating if you want
+                    setSubmitted(true); 
                 }
                 return ticket;
             } catch (e) {
@@ -568,3 +566,88 @@ function RateEvent({ eventId }: { eventId: number }) {
         </Box>
     );
 }
+
+function EventPrice({ eventID ,basePrice = 100 }: {  basePrice?: number, eventID?:number }) {
+    const { user } = useAuth();
+    const userId = user?.id;
+
+    // 1. Capture the data from the query
+    const { data: existingTicket } = useQuery({
+        queryKey: ['my-ticket', eventID, userId], // Added userId to key for cache safety
+        queryFn: async () => {
+            // Ensure we handle the request correctly
+            const res = await client.get(`/tickets/event/${eventID}`);
+            // 2. IMPORTANT: You must return the data here
+            return res.data.ticket; 
+        },
+        // Optional: Only run query if we have an eventID and a user
+        enabled: !!eventID && !!userId, 
+    });
+
+    const currentPrice = useDiscountedPrice(basePrice);
+
+    return (
+        <div>
+            {/* 3. Logic: If ticket exists, show that price. Else, show sales price. */}
+            {existingTicket?.price != null ? (
+                // --- CASE A: User already has a ticket ---
+                <Typography variant="h6" >
+                    <span style={{ textDecoration: 'line-through', color: 'gray', marginRight: '4px' }}>
+                            {basePrice}
+                        </span>
+                    {existingTicket.price}
+                    <span style={{ fontSize: 15 }}>EGP</span>
+                </Typography>
+            ) : (
+                // --- CASE B: User does not have a ticket (Standard logic) ---
+                basePrice !== currentPrice ? (
+                    <Typography variant="h6">
+                        {basePrice != currentPrice && <span style={{ textDecoration: 'line-through', color: 'gray', marginRight: '4px' }}>
+                            {basePrice}
+                        </span>}
+                        {currentPrice}
+                        <span style={{ fontSize: 15 }}>EGP</span>
+                    </Typography>
+                ) : (
+                    <Typography>
+                        {basePrice}<span style={{ fontSize: 15 }}>EGP</span>
+                    </Typography>
+                )
+            )}
+        </div>
+    );
+}
+
+
+
+// Custom hook to compute discounted price safely with React hooks
+function useDiscountedPrice(basePrice: number = 100) {
+    const { user } = useAuth();
+    const userId = user?.id;
+    const { data: badgesData } = useQuery({
+        queryKey: ['badges'],
+        queryFn: async () => {
+            const res = await client.get('/teams/badges');
+            return res.data.students;
+        }
+    });
+    const getPrice = () => {
+        if (!badgesData || !userId) return basePrice;
+        const userBadge = badgesData.find((badge: any) => badge.studentId === userId);
+        if (!userBadge) return basePrice;
+        if (!userBadge.badgeType) return basePrice;
+        if (!userBadge.usageNum || userBadge.usageNum === 0) return basePrice;
+        switch (String(userBadge.badgeType).toLowerCase()) {
+            case 'rising star':
+                return basePrice * 0.9;
+            case 'old star':
+                return basePrice * 0.8;
+            case 'top fan':
+                return basePrice * 0.7;
+            default:
+                return basePrice;
+        }
+    };
+    return getPrice();
+}
+
