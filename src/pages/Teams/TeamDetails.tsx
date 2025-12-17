@@ -44,7 +44,7 @@ import {
   Event as EventIcon,
   MailOutline,
   PhotoSizeSelectActualOutlined,
-  Add
+  Add,
 } from "@mui/icons-material";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -83,7 +83,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`team-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>} 
+      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
     </div>
   );
 }
@@ -167,12 +167,19 @@ export default function TeamDetails() {
   const [createPostError, setCreatePostError] = useState("");
   const [newPostMedia, setNewPostMedia] = useState<NewPostMediaItem[]>([]);
 
+  const [joinDialogOpen, setJoinDialogOpen] = useState(false);
+  const [joinRole, setJoinRole] = useState("organizer");
+  const [cvUrl, setCvUrl] = useState("");
+  const [joinError, setJoinError] = useState("");
+
   const userJsonString = localStorage.getItem("user");
   const userID = userJsonString
     ? parseInt(JSON.parse(userJsonString).id, 10)
     : 0; // 1. Fetch Team Details
 
-  const userGlobalRole = userJsonString ? JSON.parse(userJsonString).roles?.global : undefined;
+  const userGlobalRole = userJsonString
+    ? JSON.parse(userJsonString).roles?.global
+    : undefined;
   const isAdmin = userGlobalRole === "admin";
 
   const {
@@ -235,7 +242,9 @@ export default function TeamDetails() {
     ? teamMembers.some((member) => member.id === userID)
     : false; // Filter members into categories
 
-  const isSubscribed = !!mySubscribedTeams?.some((t: any) => t?.id === team?.id);
+  const isSubscribed = !!mySubscribedTeams?.some(
+    (t: any) => t?.id === team?.id
+  );
 
   const organizersArray: TeamMember[] =
     teamMembers?.filter((member) => member.role === "organizer") || [];
@@ -258,12 +267,15 @@ export default function TeamDetails() {
     queryKey: ["teamPosts", id],
     queryFn: async () => {
       const res = await client.get(`/posts/team/${id}`);
-      return Array.isArray(res.data?.posts) ? (res.data.posts as TeamPost[]) : [];
+      return Array.isArray(res.data?.posts)
+        ? (res.data.posts as TeamPost[])
+        : [];
     },
     enabled: !!id,
   });
 
-  const canCreatePost = isAdmin || isLeader || isOrganizer || isMediaTeam|| isSubscribed;
+  const canCreatePost =
+    isAdmin || isLeader || isOrganizer || isMediaTeam || isSubscribed;
 
   const createPostMutation = useMutation({
     mutationFn: async () => {
@@ -291,12 +303,35 @@ export default function TeamDetails() {
     },
   });
 
+  const applyMutation = useMutation({
+    mutationFn: async () => {
+      if (!cvUrl) throw new Error("Please upload your CV first");
+
+      // The keys must match the applyToTeamSchema in your router
+      return await client.post(`/students/teams/apply`, {
+        teamId: Number(id),
+        desiredRole: joinRole, // Must match Zod 'desiredRole'
+        cv: cvUrl, // Must match Zod 'cv'
+      });
+    },
+    onSuccess: () => {
+      setJoinDialogOpen(false);
+      setCvUrl("");
+      setJoinError("");
+      alert("Application submitted successfully!");
+    },
+    onError: (err: any) => {
+      // This will now catch the specific validation error if it fails again
+      setJoinError(err.response?.data?.error || "Failed to submit application");
+    },
+  });
+
   const handleCreateEvent = () => {
     prompt("Action: Open Create Event Form");
   };
 
   const handleJoinAction = () => {
-    prompt("Action: Apply to Join Team");
+    setJoinDialogOpen(true);
   };
 
   const handleLeaveAction = () => {
@@ -329,7 +364,6 @@ export default function TeamDetails() {
     }
   };
 
-
   const handleEditAction = () => {
     if (team) {
       reset({ name: team.name, description: team.description });
@@ -350,15 +384,12 @@ export default function TeamDetails() {
           ? `/reports/teams/${id}/participation`
           : `/reports/teams/${id}/engagement`;
 
-      const response = await client.get(
-        reportPath,
-        {
-          params: {
-            scope: reportScope,
-            timeRange,
-          },
-        }
-      );
+      const response = await client.get(reportPath, {
+        params: {
+          scope: reportScope,
+          timeRange,
+        },
+      });
 
       const apiData = response.data.data || [];
       const formattedData = apiData.map((item: any) => ({
@@ -456,9 +487,8 @@ export default function TeamDetails() {
     return (
       <Paper sx={{ p: 4, mt: 4 }}>
         <Typography color="error" variant="h6">
-          Error loading team: {error?.message || "Team not found."} 
+          Error loading team: {error?.message || "Team not found."}
         </Typography>
-        
       </Paper>
     );
   } // --- Reusable Member List Rendering Component ---
@@ -505,20 +535,18 @@ export default function TeamDetails() {
             </Typography>
           )}
         </List>
-        
       </Box>
     ); // --- Render the main Layout ---
 
   return (
     <Box sx={{ width: "100%", p: 3, display: "flex", flexDirection: "column" }}>
-      {/* 1. Header Banner */} 
+      {/* 1. Header Banner */}
       <TeamBanner>
         <Typography variant="h3" sx={{ fontWeight: "bold" }}>
           {team.name}
         </Typography>
-        <Typography variant="h6">{team.description}</Typography> 
+        <Typography variant="h6">{team.description}</Typography>
       </TeamBanner>
-      
       <Box sx={{ mb: 3, display: "flex" }}>
         {isLeader && (
           <Button
@@ -551,7 +579,7 @@ export default function TeamDetails() {
             startIcon={<PersonAdd />}
             onClick={handleJoinAction}
           >
-            Apply to Join
+            Apply For a Role
           </Button>
         )}
         {/* Button: Leave Team (If IS a member AND NOT the leader) */}
@@ -566,7 +594,6 @@ export default function TeamDetails() {
             Leave Team
           </Button>
         )}
-
         {canViewReports && (
           <Button
             sx={{ ml: 2 }}
@@ -582,9 +609,7 @@ export default function TeamDetails() {
             Reports
           </Button>
         )}
-        
       </Box>
-
       <Dialog
         open={reportsOpen}
         onClose={() => setReportsOpen(false)}
@@ -599,7 +624,11 @@ export default function TeamDetails() {
             </Alert>
           )}
 
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ mb: 2 }}
+          >
             <FormControl fullWidth>
               <InputLabel id="team-report-type">Report</InputLabel>
               <Select
@@ -689,18 +718,30 @@ export default function TeamDetails() {
                       <TableCell>{item.name}</TableCell>
                       {reportType === "participation" ? (
                         <>
-                          <TableCell align="right">{item.participants}</TableCell>
-                          <TableCell align="right">{item.attendanceRate ?? 0}%</TableCell>
+                          <TableCell align="right">
+                            {item.participants}
+                          </TableCell>
+                          <TableCell align="right">
+                            {item.attendanceRate ?? 0}%
+                          </TableCell>
                         </>
                       ) : (
                         <>
-                          <TableCell align="right">{item.participants}</TableCell>
-                          <TableCell align="right">{item.engagementScore ?? 0}</TableCell>
-                          <TableCell align="right">{item.totalInteractions ?? 0}</TableCell>
+                          <TableCell align="right">
+                            {item.participants}
+                          </TableCell>
+                          <TableCell align="right">
+                            {item.engagementScore ?? 0}
+                          </TableCell>
+                          <TableCell align="right">
+                            {item.totalInteractions ?? 0}
+                          </TableCell>
                         </>
                       )}
                       <TableCell align="right">
-                        {item.date ? new Date(item.date).toLocaleDateString() : "-"}
+                        {item.date
+                          ? new Date(item.date).toLocaleDateString()
+                          : "-"}
                       </TableCell>
                     </TableRow>
                   ))
@@ -711,12 +752,16 @@ export default function TeamDetails() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReportsOpen(false)}>Close</Button>
-          <Button variant="contained" onClick={fetchTeamReport} disabled={reportsLoading}>
+          <Button
+            variant="contained"
+            onClick={fetchTeamReport}
+            disabled={reportsLoading}
+          >
             Refresh
           </Button>
         </DialogActions>
       </Dialog>
-      {/* 2. Navigation Tabs (Dynamic) */} 
+      {/* 2. Navigation Tabs (Dynamic) */}
       <Paper sx={{ mb: 3 }} square={true}>
         <Tabs
           value={tabValue}
@@ -727,11 +772,14 @@ export default function TeamDetails() {
             <Tab key={tab.id} label={tab.label} />
           ))}
         </Tabs>
-        
       </Paper>
-      {/* 3. Tab Content */} {/* Tab: Posts */} 
+      {/* 3. Tab Content */} {/* Tab: Posts */}
       <TabPanel value={tabValue} index={tabIndexMap["posts"]}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+        >
           <Typography variant="h5">Team Posts</Typography>
           {canCreatePost && (
             <Button
@@ -778,7 +826,9 @@ export default function TeamDetails() {
                       </Typography>
                     }
                     subheader={
-                      post.issuedAt ? new Date(post.issuedAt).toLocaleString() : ""
+                      post.issuedAt
+                        ? new Date(post.issuedAt).toLocaleString()
+                        : ""
                     }
                   />
                   <CardContent sx={{ pt: 0 }}>
@@ -809,9 +859,8 @@ export default function TeamDetails() {
             </Stack>
           )}
         </Box>
-        
       </TabPanel>
-      {/* Tab: Events */} 
+      {/* Tab: Events */}
       <TabPanel value={tabValue} index={tabIndexMap["events"]}>
         <Stack
           direction="row"
@@ -831,12 +880,10 @@ export default function TeamDetails() {
             </Button>
           )}
         </Stack>
-        
-          <EventsList teamID={team.id} />
-        
-        
+
+        <EventsList teamID={team.id} />
       </TabPanel>
-      {/* Tab: Members */} 
+      {/* Tab: Members */}
       <TabPanel value={tabValue} index={tabIndexMap["members"]}>
         <Typography variant="h5">Team Members</Typography>
         {isMembersLoading ? (
@@ -875,16 +922,15 @@ export default function TeamDetails() {
             )}
           </>
         )}
-        
       </TabPanel>
-      {/* Conditional Tab: Pending Posts (Media Team/Leader Only) */} 
+      {/* Conditional Tab: Pending Posts (Media Team/Leader Only) */}
       {(isMediaTeam || isLeader) && (
         <TabPanel value={tabValue} index={tabIndexMap["pendingPosts"]}>
           <Typography
             variant="h5"
             sx={{ display: "flex", alignItems: "center", gap: 1 }}
           >
-            <PhotoSizeSelectActualOutlined /> Pending Posts 
+            <PhotoSizeSelectActualOutlined /> Pending Posts
           </Typography>
 
           <Paper sx={{ p: 3, mt: 2 }}>
@@ -895,7 +941,7 @@ export default function TeamDetails() {
           </Paper>
         </TabPanel>
       )}
-      {/* Conditional Tab: Join Requests (HR Team/Leader Only) */} 
+      {/* Conditional Tab: Join Requests (HR Team/Leader Only) */}
       {(isHR || isLeader) && (
         <TabPanel value={tabValue} index={tabIndexMap["joinRequests"]}>
           <Typography
@@ -913,7 +959,7 @@ export default function TeamDetails() {
           </Paper>
         </TabPanel>
       )}
-      {/* Edit Team Dialog */} 
+      {/* Edit Team Dialog */}
       {isLeader && (
         <Dialog open={openEdit} onClose={() => setOpenEdit(false)}>
           <DialogTitle>Edit Team: {team.name}</DialogTitle>
@@ -962,7 +1008,6 @@ export default function TeamDetails() {
           </form>
         </Dialog>
       )}
-
       <Dialog
         open={createPostOpen}
         onClose={() => setCreatePostOpen(false)}
@@ -1036,7 +1081,8 @@ export default function TeamDetails() {
             color="text.secondary"
             sx={{ mt: 1, display: "block" }}
           >
-            Posting is allowed for the team leader, organizers/media team, or admins.
+            Posting is allowed for the team leader, organizers/media team, or
+            admins.
           </Typography> */}
         </DialogContent>
         <DialogActions>
@@ -1050,7 +1096,93 @@ export default function TeamDetails() {
           </Button>
         </DialogActions>
       </Dialog>
-      
+      <Dialog
+        open={joinDialogOpen}
+        onClose={() => setJoinDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Apply to Join {team?.name}</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          {joinError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {joinError}
+            </Alert>
+          )}
+
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Please select the Role you are interested in and upload your
+            CV/Portfolio.
+          </Typography>
+
+          <FormControl fullWidth sx={{ mb: 3 }}>
+            <InputLabel id="join-role-label">Target Role</InputLabel>
+            <Select
+              labelId="join-role-label"
+              value={joinRole}
+              label="Target Role"
+              onChange={(e) => setJoinRole(e.target.value)}
+            >
+              <MenuItem value="organizer">Organizers Team</MenuItem>
+              <MenuItem value="hr">HR Team</MenuItem>
+              <MenuItem value="mediaTeam">Media Team</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Box
+            sx={{
+              p: 2,
+              border: "1px dashed",
+              borderColor: "divider",
+              borderRadius: 1,
+              textAlign: "center",
+            }}
+          >
+            <Typography variant="subtitle2" gutterBottom>
+              Upload CV (PDF or Image)
+            </Typography>
+            <FileUploaderRegular
+              sourceList="local,camera,gdrive"
+              classNameUploader="uc-light"
+              pubkey="1ed9d5259738cb825f1c"
+              multiple={false} // Applications usually only need one CV
+              onChange={(items) => {
+                // Extract the successful upload URL from Uploadcare
+                const successFile = items.allEntries.find(
+                  (file: any) => file.status === "success"
+                );
+                if (successFile) {
+                  setCvUrl(String(successFile.cdnUrl)); // This populates the cvUrl state
+                  setJoinError(""); // Clear previous errors
+                }
+              }}
+            />
+            {cvUrl && (
+              <Typography
+                color="success.main"
+                variant="caption"
+                sx={{ mt: 1, display: "block" }}
+              >
+                File uploaded successfully!
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setJoinDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => applyMutation.mutate()}
+            disabled={applyMutation.isPending || !cvUrl}
+          >
+            {applyMutation.isPending ? (
+              <CircularProgress size={24} />
+            ) : (
+              "Submit Application"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
