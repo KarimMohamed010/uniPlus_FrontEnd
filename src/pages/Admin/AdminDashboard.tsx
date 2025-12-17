@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Card,
@@ -22,10 +22,9 @@ import {
   Grid,
   Alert,
   CircularProgress,
-  InputAdornment,
   Container,
 } from "@mui/material";
-import { Download, Search, Warning } from "@mui/icons-material";
+import { Download, Add } from "@mui/icons-material";
 import { useAuth } from "../../context/AuthContext";
 import client from "../../api/client";
 import { useForm } from "react-hook-form";
@@ -97,6 +96,26 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleGenerateManagerialReport = async () => {
+    try {
+      setIsLoading(true);
+      setError("");
+
+      const response = await client.get("/reports/managerial");
+      setManagerialReport(response.data.data);
+      setSuccessMessage("Managerial report generated successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (error: any) {
+      console.error("Failed to generate managerial report:", error);
+      const errorMessage =
+        error.response?.data?.error ||
+        "Failed to generate managerial report. Please try again.";
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const { user } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -104,16 +123,24 @@ export default function AdminDashboard() {
 
   // Event/Organization Approval States
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
-  const [approvalReason, setApprovalReason] = useState("");
-  const [pendingApprovals] = useState<
+  const [pendingApprovals, setPendingApprovals] = useState<
     Array<{
       id: string;
       name: string;
-      type: string;
+      type: "event" | "team";
       submittedBy: string;
-      date: string;
+      date: string | null;
     }>
   >([]);
+  const [selectedApprovalItem, setSelectedApprovalItem] = useState<null | {
+    id: string;
+    name: string;
+    type: "event" | "team";
+    submittedBy: string;
+    date: string | null;
+  }>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [approvalItemDetails, setApprovalItemDetails] = useState<any>(null);
 
   // Reports States
   const [reportType, setReportType] = useState<"participation" | "engagement">("participation");
@@ -130,31 +157,30 @@ export default function AdminDashboard() {
   }>>([]);
   const [isReportGenerated, setIsReportGenerated] = useState(false);
 
-  // Behavior Warning States
-  const [warningUserId, setWarningUserId] = useState("");
-  const [warningReason, setWarningReason] = useState("");
-  const [recentWarnings] = useState<
-    Array<{
-      id: string | number;
-      user: string;
-      reason: string;
-      issuedDate: string;
-      status: string;
-    }>
-  >([]);
-
-  // User Management States
-  const [userSearchQuery, setUserSearchQuery] = useState("");
-  const [users] = useState<
-    Array<{
-      id: string | number;
-      name: string;
-      username: string;
-      email: string;
-      role: string;
-      status: string;
-    }>
-  >([]);
+  const [managerialReport, setManagerialReport] = useState<null | {
+    totalUsers: number;
+    totalStudents: number;
+    totalAdmins: number;
+    totalTeams: number;
+    totalEvents: number;
+    approvedEvents: number;
+    pendingEvents: number;
+    rejectedEvents: number;
+    totalRegistrations: number;
+    uniqueRegistrants: number;
+    totalCheckins: number;
+    checkinRate: number;
+    avgTicketPrice: number;
+    minTicketPrice: number;
+    maxTicketPrice: number;
+    avgRating: number;
+    feedbackCount: number;
+    totalPosts: number;
+    totalComments: number;
+    totalMessages: number;
+    totalRides: number;
+    totalApplications: number;
+  }>(null);
 
   // Admin List State
   const [adminsList, setAdminsList] = useState<
@@ -167,6 +193,20 @@ export default function AdminDashboard() {
     }>
   >([]);
 
+  // Rooms State
+  const [roomsList, setRoomsList] = useState<
+    Array<{
+      id: number;
+      name: string;
+      capacity: number;
+      location: string | null;
+    }>
+  >([]);
+  const [addRoomDialogOpen, setAddRoomDialogOpen] = useState(false);
+  const [roomName, setRoomName] = useState("");
+  const [roomCapacity, setRoomCapacity] = useState<number>(0);
+  const [roomLocation, setRoomLocation] = useState("");
+
   // Fetch Admins
   const fetchAdmins = async () => {
     try {
@@ -175,6 +215,53 @@ export default function AdminDashboard() {
       setAdminsList(response.data.admins || []);
     } catch (error) {
       console.error("Failed to fetch admins:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch Rooms
+  const fetchRooms = async () => {
+    try {
+      setIsLoading(true);
+      const response = await client.get("/events/rooms");
+      setRoomsList(response.data.rooms || []);
+    } catch (error) {
+      console.error("Failed to fetch rooms:", error);
+      setError("Failed to fetch rooms");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Add Room Handler
+  const handleAddRoom = async () => {
+    try {
+      if (!roomName || roomCapacity < 1) {
+        setError("Room name and capacity are required");
+        return;
+      }
+      setIsLoading(true);
+      setError("");
+      await client.post("/events/rooms", {
+        name: roomName,
+        capacity: roomCapacity,
+        location: roomLocation || undefined,
+      });
+      setSuccessMessage("Room added successfully!");
+      setAddRoomDialogOpen(false);
+      setRoomName("");
+      setRoomCapacity(0);
+      setRoomLocation("");
+      fetchRooms();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      console.error("Failed to add room:", err);
+      if (err instanceof AxiosError && err.response) {
+        setError(err.response.data.error);
+      } else {
+        setError("Failed to add room");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -197,19 +284,46 @@ export default function AdminDashboard() {
   };
 
   // Handlers for Event/Organization Approval
-  const handleApproveItem = async (itemId: string, approved: boolean) => {
+  const fetchPendingApprovals = async () => {
     try {
       setIsLoading(true);
-      await client.patch(`/admin/approvals/${itemId}`, {
-        approved,
-        reason: approvalReason,
-        itemType: "event",
-      });
+      setError("");
+      const response = await client.get("/admin/approvals/pending");
+      setPendingApprovals(response.data.items || []);
+    } catch (error: any) {
+      console.error("Failed to fetch pending approvals:", error);
+      const errorMessage =
+        error.response?.data?.error || "Failed to fetch pending approvals.";
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tabValue === 0) {
+      fetchPendingApprovals();
+    } else if (tabValue === 4) {
+      fetchRooms();
+    }
+  }, [tabValue]);
+
+  const handleApproveItem = async (approved: boolean) => {
+    try {
+      if (!selectedApprovalItem) return;
+      setIsLoading(true);
+      await client.patch(
+        `/admin/approvals/${selectedApprovalItem.type}/${selectedApprovalItem.id}`,
+        {
+          approved,
+        }
+      );
       setSuccessMessage(
         `Item ${approved ? "approved" : "rejected"} successfully!`
       );
       setApprovalDialogOpen(false);
-      setApprovalReason("");
+      setSelectedApprovalItem(null);
+      await fetchPendingApprovals();
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error) {
       console.error("Failed to process approval:", error);
@@ -218,8 +332,45 @@ export default function AdminDashboard() {
     }
   };
 
-  // Handlers for Admin Management
-  // These handlers are available for future use in admin management features
+  const handleRemoveApprovalItem = async (item: {
+    id: string;
+    type: "event" | "team";
+  }) => {
+    try {
+      setIsLoading(true);
+      setError("");
+      await client.delete(`/admin/approvals/${item.type}/${item.id}`);
+      setSuccessMessage("Item removed successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+      await fetchPendingApprovals();
+    } catch (error: any) {
+      console.error("Failed to remove item:", error);
+      const errorMessage = error.response?.data?.error || "Failed to remove item.";
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenDetails = async (item: {
+    id: string;
+    type: "event" | "team";
+  }) => {
+    try {
+      setIsLoading(true);
+      setError("");
+      const response = await client.get(`/admin/approvals/${item.type}/${item.id}`);
+      setApprovalItemDetails(response.data);
+      setDetailsDialogOpen(true);
+    } catch (error: any) {
+      console.error("Failed to fetch item details:", error);
+      const errorMessage =
+        error.response?.data?.error || "Failed to fetch item details.";
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Handlers for Reports
   const handleGenerateReport = async () => {
@@ -227,7 +378,6 @@ export default function AdminDashboard() {
       setIsLoading(true);
       setError("");
       
-      // Make API call to get the report data
       const response = await client.get(`/reports/${reportType}`, {
         params: {
           scope: reportScope,
@@ -235,10 +385,8 @@ export default function AdminDashboard() {
         }
       });
       
-      // Transform the API response to match our frontend data structure
       const apiData = response.data.data || [];
       
-      // Format the data for the table
       const formattedData = apiData.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -264,11 +412,9 @@ export default function AdminDashboard() {
 
   const handleDownloadReport = () => {
     try {
-      // Convert report data to CSV
       const headers = [];
-      const dataRows = [];
+      const dataRows: string[] = [];
       
-      // Add headers based on report type
       if (reportType === 'participation') {
         headers.push('Name', 'Participants', 'Attendance Rate (%)', 'Date');
         reportData.forEach(item => {
@@ -292,13 +438,11 @@ export default function AdminDashboard() {
         });
       }
       
-      // Create CSV content
       const csvContent = [
         headers.join(','),
         ...dataRows
       ].join('\n');
       
-      // Create download link
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -316,43 +460,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // Handlers for Behavior Warnings
-  const handleIssueWarning = async () => {
-    if (!warningUserId || !warningReason) return;
-    try {
-      setIsLoading(true);
-      await client.post("/admin/warnings", {
-        userId: warningUserId,
-        reason: warningReason,
-      });
-      setSuccessMessage("Warning issued successfully!");
-      setWarningUserId("");
-      setWarningReason("");
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (error) {
-      console.error("Failed to issue warning:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handlers for User Management
-  const handleToggleUserStatus = async (userId: string | number) => {
-    try {
-      setIsLoading(true);
-      await client.patch(`/admin/users/${userId}/status`);
-      setSuccessMessage("User status updated successfully!");
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (error) {
-      console.error("Failed to update user status:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handlers for Announcements
-  // This handler is available for sending system announcements to all users;;
-
   if (user?.roles.global !== "admin") {
     return (
       <Box sx={{ p: 3 }}>
@@ -365,12 +472,6 @@ export default function AdminDashboard() {
 
   return (
     <Box sx={{ width: "100%" }}>
-      {/* {successMessage && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {successMessage}
-        </Alert>
-      )} */}
-
       <Card>
         <CardContent>
           <Typography variant="h4" sx={{ mb: 3 }}>
@@ -382,11 +483,11 @@ export default function AdminDashboard() {
             onChange={(e, newValue) => setTabValue(newValue)}
             aria-label="admin tabs"
           >
-            <Tab label="Event/Org Approvals" id="admin-tab-0" />
+            <Tab label="Event/Team Approvals" id="admin-tab-0" />
             <Tab label="Add Admin" id="admin-tab-1" />
             <Tab label="Reports" id="admin-tab-2" />
-            <Tab label="Behavior Warnings" id="admin-tab-3" />
-            <Tab label="User Management" id="admin-tab-4" />
+            <Tab label="Managerial Reports" id="admin-tab-3" />
+            <Tab label="Rooms" id="admin-tab-4" />
           </Tabs>
 
           {/* TAB 0: Event/Organization Approvals */}
@@ -395,6 +496,16 @@ export default function AdminDashboard() {
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Pending Approvals
               </Typography>
+              {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
+              {successMessage && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  {successMessage}
+                </Alert>
+              )}
               <TableContainer component={Paper}>
                 <Table>
                   <TableHead>
@@ -421,13 +532,31 @@ export default function AdminDashboard() {
                           <TableCell>{item.name}</TableCell>
                           <TableCell>{item.type}</TableCell>
                           <TableCell>{item.submittedBy}</TableCell>
-                          <TableCell>{item.date}</TableCell>
+                          <TableCell>
+                            {item.date ? new Date(item.date).toLocaleString() : "-"}
+                          </TableCell>
                           <TableCell>
                             <Button
                               size="small"
-                              onClick={() => setApprovalDialogOpen(true)}
+                              onClick={() => handleOpenDetails(item)}
+                            >
+                              Details
+                            </Button>
+                            <Button
+                              size="small"
+                              onClick={() => {
+                                setSelectedApprovalItem(item);
+                                setApprovalDialogOpen(true);
+                              }}
                             >
                               Review
+                            </Button>
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => handleRemoveApprovalItem(item)}
+                            >
+                              Remove
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -446,37 +575,425 @@ export default function AdminDashboard() {
               >
                 <DialogTitle>Approval Decision</DialogTitle>
                 <DialogContent sx={{ pt: 2 }}>
-                  <TextField
-                    fullWidth
-                    label="Reason (Optional)"
-                    value={approvalReason}
-                    onChange={(e) => setApprovalReason(e.target.value)}
-                    multiline
-                    rows={4}
-                    placeholder="Add a reason for approval or rejection..."
-                  />
+                  <Typography variant="body1" sx={{ mb: 1 }}>
+                    {selectedApprovalItem
+                      ? `Do you want to approve or reject this ${selectedApprovalItem.type}?`
+                      : "Do you want to approve or reject this item?"}
+                  </Typography>
+                  {selectedApprovalItem && (
+                    <Box sx={{ p: 2, borderRadius: 2, backgroundColor: "rgba(0,0,0,0.04)" }}>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {selectedApprovalItem.name}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Submitted by: {selectedApprovalItem.submittedBy}
+                      </Typography>
+                    </Box>
+                  )}
                 </DialogContent>
                 <DialogActions>
                   <Button
-                    onClick={() => setApprovalDialogOpen(false)}
+                    onClick={() => {
+                      setApprovalDialogOpen(false);
+                      setSelectedApprovalItem(null);
+                    }}
                     disabled={isLoading}
                   >
                     Cancel
                   </Button>
                   <Button
-                    onClick={() => handleApproveItem("1", false)}
+                    onClick={() => handleApproveItem(false)}
                     color="error"
                     disabled={isLoading}
                   >
                     Reject
                   </Button>
                   <Button
-                    onClick={() => handleApproveItem("1", true)}
+                    onClick={() => handleApproveItem(true)}
                     color="success"
                     variant="contained"
                     disabled={isLoading}
                   >
                     {isLoading ? <CircularProgress size={20} /> : "Approve"}
+                  </Button>
+                </DialogActions>
+              </Dialog>
+
+              <Dialog
+                open={detailsDialogOpen}
+                onClose={() => {
+                  setDetailsDialogOpen(false);
+                  setApprovalItemDetails(null);
+                }}
+                maxWidth="md"
+                fullWidth
+              >
+                <DialogTitle>Item Details</DialogTitle>
+                <DialogContent sx={{ pt: 2 }}>
+                  {!approvalItemDetails ? (
+                    <Typography color="textSecondary">No details</Typography>
+                  ) : approvalItemDetails.event ? (
+                    <Box>
+                      <Card sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            {approvalItemDetails.event.title}
+                          </Typography>
+                          <Grid container spacing={2}>
+                            <Grid key="ev_meta_1" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Type
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.type || "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="ev_meta_2" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Status
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.acceptanceStatus || "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="ev_meta_3" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Start
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.startTime
+                                  ? new Date(approvalItemDetails.event.startTime).toLocaleString()
+                                  : "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="ev_meta_4" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                End
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.endTime
+                                  ? new Date(approvalItemDetails.event.endTime).toLocaleString()
+                                  : "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="ev_meta_5" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Team
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.team?.name || "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="ev_meta_6" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Team Leader
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.event.teamLeader
+                                  ? `${approvalItemDetails.event.teamLeader.fname} ${approvalItemDetails.event.teamLeader.lname}`
+                                  : "-"}
+                              </Typography>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+
+                      {approvalItemDetails.stats && (
+                        <Grid container spacing={2} sx={{ mb: 2 }}>
+                          <Grid key="ev_stat_1" size={{ xs: 12, sm: 6, md: 3 }}>
+                            <Card>
+                              <CardContent>
+                                <Typography color="textSecondary">Registrations</Typography>
+                                <Typography variant="h5">
+                                  {approvalItemDetails.stats.totalRegistrations ?? 0}
+                                </Typography>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                          <Grid key="ev_stat_2" size={{ xs: 12, sm: 6, md: 3 }}>
+                            <Card>
+                              <CardContent>
+                                <Typography color="textSecondary">Check-ins</Typography>
+                                <Typography variant="h5">
+                                  {approvalItemDetails.stats.totalCheckins ?? 0}
+                                </Typography>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                          <Grid key="ev_stat_3" size={{ xs: 12, sm: 6, md: 3 }}>
+                            <Card>
+                              <CardContent>
+                                <Typography color="textSecondary">Avg Rating</Typography>
+                                <Typography variant="h5">
+                                  {approvalItemDetails.stats.avgRating ?? 0}
+                                </Typography>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                          <Grid key="ev_stat_4" size={{ xs: 12, sm: 6, md: 3 }}>
+                            <Card>
+                              <CardContent>
+                                <Typography color="textSecondary">Feedback</Typography>
+                                <Typography variant="h5">
+                                  {approvalItemDetails.stats.feedbackCount ?? 0}
+                                </Typography>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                        </Grid>
+                      )}
+
+                      {approvalItemDetails.room && (
+                        <Card sx={{ mb: 2 }}>
+                          <CardContent>
+                            <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                              Room
+                            </Typography>
+                            <Grid container spacing={2}>
+                              <Grid key="room_1" size={{ xs: 12, sm: 6 }}>
+                                <Typography variant="body2" color="textSecondary">
+                                  Name
+                                </Typography>
+                                <Typography>{approvalItemDetails.room.name}</Typography>
+                              </Grid>
+                              <Grid key="room_2" size={{ xs: 12, sm: 3 }}>
+                                <Typography variant="body2" color="textSecondary">
+                                  Capacity
+                                </Typography>
+                                <Typography>{approvalItemDetails.room.capacity}</Typography>
+                              </Grid>
+                              <Grid key="room_3" size={{ xs: 12, sm: 3 }}>
+                                <Typography variant="body2" color="textSecondary">
+                                  Location
+                                </Typography>
+                                <Typography>{approvalItemDetails.room.location}</Typography>
+                              </Grid>
+                            </Grid>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {Array.isArray(approvalItemDetails.speakers) && (
+                        <Card sx={{ mb: 2 }}>
+                          <CardContent>
+                            <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                              Speakers
+                            </Typography>
+                            <TableContainer component={Paper}>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Name</TableCell>
+                                    <TableCell>Email</TableCell>
+                                    <TableCell>Contact</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {approvalItemDetails.speakers.length === 0 ? (
+                                    <TableRow>
+                                      <TableCell colSpan={3} align="center">
+                                        <Typography color="textSecondary">No speakers</Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : (
+                                    approvalItemDetails.speakers.map((s: any) => (
+                                      <TableRow key={s.id}>
+                                        <TableCell>{s.name || `${s.fname || ""} ${s.lname || ""}`}</TableCell>
+                                        <TableCell>{s.email || "-"}</TableCell>
+                                        <TableCell>{s.contact || "-"}</TableCell>
+                                      </TableRow>
+                                    ))
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {Array.isArray(approvalItemDetails.registrations) && (
+                        <Card>
+                          <CardContent>
+                            <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                              Registrations
+                            </Typography>
+                            <TableContainer component={Paper}>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Student</TableCell>
+                                    <TableCell>Email</TableCell>
+                                    <TableCell>Price</TableCell>
+                                    <TableCell>Checked In</TableCell>
+                                    <TableCell>Rating</TableCell>
+                                    <TableCell>Date</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {approvalItemDetails.registrations.length === 0 ? (
+                                    <TableRow>
+                                      <TableCell colSpan={6} align="center">
+                                        <Typography color="textSecondary">No registrations</Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : (
+                                    approvalItemDetails.registrations.map((r: any) => (
+                                      <TableRow key={`${r.studentId}-${r.dateIssued}`}>
+                                        <TableCell>{r.studentName || r.studentId}</TableCell>
+                                        <TableCell>{r.email || "-"}</TableCell>
+                                        <TableCell>{r.price ?? "-"}</TableCell>
+                                        <TableCell>{r.scanned ? "Yes" : "No"}</TableCell>
+                                        <TableCell>{r.rating ?? "-"}</TableCell>
+                                        <TableCell>
+                                          {r.dateIssued ? new Date(r.dateIssued).toLocaleString() : "-"}
+                                        </TableCell>
+                                      </TableRow>
+                                    ))
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </Box>
+                  ) : approvalItemDetails.team ? (
+                    <Box>
+                      <Card sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            {approvalItemDetails.team.name}
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                            {approvalItemDetails.team.description || "No description"}
+                          </Typography>
+                          <Grid container spacing={2}>
+                            <Grid key="team_meta_1" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Status
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.team.acceptanceStatus || "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="team_meta_2" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Subscribers
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.subscribers ?? 0}
+                              </Typography>
+                            </Grid>
+                            <Grid key="team_meta_3" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Leader
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.team.leader
+                                  ? `${approvalItemDetails.team.leader.fname} ${approvalItemDetails.team.leader.lname}`
+                                  : "-"}
+                              </Typography>
+                            </Grid>
+                            <Grid key="team_meta_4" size={{ xs: 12, sm: 6 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                Leader Email
+                              </Typography>
+                              <Typography variant="body1">
+                                {approvalItemDetails.team.leader?.email || "-"}
+                              </Typography>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+
+                      <Card sx={{ mb: 2 }}>
+                        <CardContent>
+                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            Members
+                          </Typography>
+                          <TableContainer component={Paper}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Name</TableCell>
+                                  <TableCell>Email</TableCell>
+                                  <TableCell>Role</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {!Array.isArray(approvalItemDetails.members) ||
+                                approvalItemDetails.members.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={3} align="center">
+                                      <Typography color="textSecondary">No members</Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ) : (
+                                  approvalItemDetails.members.map((m: any) => (
+                                    <TableRow key={`${m.studentId}-${m.role}`}>
+                                      <TableCell>{`${m.fname || ""} ${m.lname || ""}`}</TableCell>
+                                      <TableCell>{m.email || "-"}</TableCell>
+                                      <TableCell>{m.role || "-"}</TableCell>
+                                    </TableRow>
+                                  ))
+                                )}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardContent>
+                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            Team Events
+                          </Typography>
+                          <TableContainer component={Paper}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Title</TableCell>
+                                  <TableCell>Start</TableCell>
+                                  <TableCell>Status</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {!Array.isArray(approvalItemDetails.events) ||
+                                approvalItemDetails.events.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={3} align="center">
+                                      <Typography color="textSecondary">No events</Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ) : (
+                                  approvalItemDetails.events.map((e: any) => (
+                                    <TableRow key={e.id}>
+                                      <TableCell>{e.title || "-"}</TableCell>
+                                      <TableCell>
+                                        {e.startTime ? new Date(e.startTime).toLocaleString() : "-"}
+                                      </TableCell>
+                                      <TableCell>{e.acceptanceStatus || "-"}</TableCell>
+                                    </TableRow>
+                                  ))
+                                )}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </CardContent>
+                      </Card>
+                    </Box>
+                  ) : (
+                    <Typography color="textSecondary">Unknown details format</Typography>
+                  )}
+                </DialogContent>
+                <DialogActions>
+                  <Button
+                    onClick={() => {
+                      setDetailsDialogOpen(false);
+                      setApprovalItemDetails(null);
+                    }}
+                  >
+                    Close
                   </Button>
                 </DialogActions>
               </Dialog>
@@ -492,9 +1009,6 @@ export default function AdminDashboard() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  // background:
-                  //   "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  // p: 2,
                 }}
               >
                 <Container maxWidth="sm">
@@ -578,7 +1092,6 @@ export default function AdminDashboard() {
                           />
                         </Grid>
 
-                        {/* NEW USERNAME FIELD */}
                         <Grid key="username" size={{ xs: 12 }}>
                           <TextField
                             fullWidth
@@ -668,7 +1181,7 @@ export default function AdminDashboard() {
                             <Button
                               size="small"
                               color="error"
-                              onClick={()=>handleRemove(admin.id )}
+                              onClick={() => handleRemove(admin.id)}
                             >
                               Remove
                             </Button>
@@ -708,7 +1221,7 @@ export default function AdminDashboard() {
                     <option value="engagement">Engagement Report</option>
                   </TextField>
                 </Grid>
-                
+
                 <Grid key="reportScope" item xs={12} sm={6} md={3}>
                   <TextField
                     select
@@ -727,7 +1240,7 @@ export default function AdminDashboard() {
                     <option value="team">By Team</option>
                   </TextField>
                 </Grid>
-                
+
                 <Grid key="timeRange" item xs={12} sm={6} md={3}>
                   <TextField
                     select
@@ -748,7 +1261,7 @@ export default function AdminDashboard() {
                     <option value="all">All Time</option>
                   </TextField>
                 </Grid>
-                
+
                 <Grid key="generateBtn" item xs={12} sm={6} md={3} sx={{ display: 'flex', alignItems: 'flex-end' }}>
                   <Button
                     fullWidth
@@ -770,9 +1283,9 @@ export default function AdminDashboard() {
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                     <Typography variant="subtitle1">
-                      Showing {reportScope === 'event' ? 'Events' : 'Teams'} for {timeRange === 'week' ? 'Last 7 Days' : 
-                      timeRange === 'month' ? 'This Month' : 
-                      timeRange === 'year' ? 'This Year' : 'All Time'}
+                      Showing {reportScope === 'event' ? 'Events' : 'Teams'} for {timeRange === 'week' ? 'Last 7 Days' :
+                        timeRange === 'month' ? 'This Month' :
+                          timeRange === 'year' ? 'This Year' : 'All Time'}
                     </Typography>
                     <Button
                       variant="outlined"
@@ -783,7 +1296,7 @@ export default function AdminDashboard() {
                       Download CSV
                     </Button>
                   </Box>
-                  
+
                   <TableContainer component={Paper}>
                     <Table>
                       <TableHead>
@@ -811,7 +1324,7 @@ export default function AdminDashboard() {
                                 <TableCell align="right">
                                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                     <Box sx={{ width: '100%', maxWidth: '100px', mr: 1 }}>
-                                      <Box 
+                                      <Box
                                         sx={{
                                           height: '8px',
                                           backgroundColor: '#e0e0e0',
@@ -819,12 +1332,12 @@ export default function AdminDashboard() {
                                           overflow: 'hidden'
                                         }}
                                       >
-                                        <Box 
+                                        <Box
                                           sx={{
                                             height: '100%',
                                             width: `${item.attendanceRate}%`,
-                                            backgroundColor: item.attendanceRate >= 80 ? '#4caf50' : 
-                                                          item.attendanceRate >= 60 ? '#ff9800' : '#f44336',
+                                            backgroundColor: (item.attendanceRate ?? 0) >= 80 ? '#4caf50' :
+                                              (item.attendanceRate ?? 0) >= 60 ? '#ff9800' : '#f44336',
                                             transition: 'width 0.3s ease'
                                           }}
                                         />
@@ -838,7 +1351,7 @@ export default function AdminDashboard() {
                                   <TableCell align="right">
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                       <Box sx={{ mr: 1 }}>{item.engagementScore?.toFixed(1)}</Box>
-                                      <Box 
+                                      <Box
                                         sx={{
                                           width: '60px',
                                           height: '8px',
@@ -847,12 +1360,12 @@ export default function AdminDashboard() {
                                           overflow: 'hidden'
                                         }}
                                       >
-                                        <Box 
+                                        <Box
                                           sx={{
                                             height: '100%',
                                             width: `${(item.engagementScore || 0) * 20}%`,
-                                            backgroundColor: (item.engagementScore || 0) >= 4 ? '#4caf50' : 
-                                                          (item.engagementScore || 0) >= 3 ? '#ff9800' : '#f44336',
+                                            backgroundColor: (item.engagementScore || 0) >= 4 ? '#4caf50' :
+                                              (item.engagementScore || 0) >= 3 ? '#ff9800' : '#f44336',
                                             transition: 'width 0.3s ease'
                                           }}
                                         />
@@ -879,11 +1392,11 @@ export default function AdminDashboard() {
                       </TableBody>
                     </Table>
                   </TableContainer>
-                  
+
                   {reportData.length > 0 && (
                     <Box sx={{ mt: 3, textAlign: 'center' }}>
                       <Typography variant="body2" color="textSecondary">
-                        Showing {reportData.length} {reportScope === 'event' ? 'events' : 'teams'} • 
+                        Showing {reportData.length} {reportScope === 'event' ? 'events' : 'teams'} •
                         Generated on {new Date().toLocaleString()}
                       </Typography>
                     </Box>
@@ -893,160 +1406,340 @@ export default function AdminDashboard() {
             </Box>
           </TabPanel>
 
-          {/* TAB 3: Behavior Warnings */}
+          {/* TAB 3: Managerial Reports */}
           <TabPanel value={tabValue} index={3}>
             <Box>
               <Typography variant="h6" sx={{ mb: 3 }}>
-                Issue Behavior Warning
+                Managerial Reports
               </Typography>
 
-              <Card sx={{ mb: 3, p: 2 }}>
+              {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
+
+              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+                <Typography color="textSecondary">
+                  Overall statistics for the whole application
+                </Typography>
+                <Button
+                  variant="contained"
+                  onClick={handleGenerateManagerialReport}
+                  disabled={isLoading}
+                  startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : undefined}
+                >
+                  {isLoading ? "Generating..." : managerialReport ? "Refresh" : "Generate"}
+                </Button>
+              </Box>
+
+              {managerialReport && (
                 <Grid container spacing={2}>
-                  <Grid key="warningUserId" size={{ xs: 12 }}>
-                    <TextField
-                      fullWidth
-                      label="User ID or Username"
-                      placeholder="Enter user ID or username"
-                      value={warningUserId}
-                      onChange={(e) => setWarningUserId(e.target.value)}
-                      disabled={isLoading}
-                    />
+                  <Grid key="mgr_totalUsers" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Users</Typography>
+                        <Typography variant="h5">{managerialReport.totalUsers}</Typography>
+                      </CardContent>
+                    </Card>
                   </Grid>
-                  <Grid key="warningReason" size={{ xs: 12 }}>
-                    <TextField
-                      fullWidth
-                      label="Warning Reason"
-                      placeholder="Describe the reason for this warning"
-                      value={warningReason}
-                      onChange={(e) => setWarningReason(e.target.value)}
-                      multiline
-                      rows={4}
-                      disabled={isLoading}
-                    />
+                  <Grid key="mgr_totalStudents" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Students</Typography>
+                        <Typography variant="h5">{managerialReport.totalStudents}</Typography>
+                      </CardContent>
+                    </Card>
                   </Grid>
-                  <Grid key="warningBtn" size={{ xs: 12 }}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      color="warning"
-                      onClick={handleIssueWarning}
-                      disabled={isLoading || !warningUserId || !warningReason}
-                      startIcon={
-                        isLoading ? <CircularProgress size={20} /> : <Warning />
-                      }
-                    >
-                      {isLoading ? "Issuing..." : "Issue Warning"}
-                    </Button>
+                  <Grid key="mgr_totalAdmins" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Admins</Typography>
+                        <Typography variant="h5">{managerialReport.totalAdmins}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalTeams" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Teams</Typography>
+                        <Typography variant="h5">{managerialReport.totalTeams}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid key="mgr_totalEvents" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Events</Typography>
+                        <Typography variant="h5">{managerialReport.totalEvents}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_approvedEvents" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Approved Events</Typography>
+                        <Typography variant="h5">{managerialReport.approvedEvents}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_pendingEvents" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Pending Events</Typography>
+                        <Typography variant="h5">{managerialReport.pendingEvents}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_rejectedEvents" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Rejected Events</Typography>
+                        <Typography variant="h5">{managerialReport.rejectedEvents}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid key="mgr_totalRegistrations" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Registrations</Typography>
+                        <Typography variant="h5">{managerialReport.totalRegistrations}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalCheckins" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Check-ins</Typography>
+                        <Typography variant="h5">{managerialReport.totalCheckins}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_checkinRate" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Check-in Rate</Typography>
+                        <Typography variant="h5">{managerialReport.checkinRate}%</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_avgRating" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Avg Rating</Typography>
+                        <Typography variant="h5">{managerialReport.avgRating}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid key="mgr_avgTicketPrice" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Avg Ticket Price</Typography>
+                        <Typography variant="h5">{managerialReport.avgTicketPrice}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_minTicketPrice" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Min Ticket Price</Typography>
+                        <Typography variant="h5">{managerialReport.minTicketPrice}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_maxTicketPrice" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Max Ticket Price</Typography>
+                        <Typography variant="h5">{managerialReport.maxTicketPrice}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_feedbackCount" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Feedback Count</Typography>
+                        <Typography variant="h5">{managerialReport.feedbackCount}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid key="mgr_totalPosts" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Posts</Typography>
+                        <Typography variant="h5">{managerialReport.totalPosts}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalComments" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Comments</Typography>
+                        <Typography variant="h5">{managerialReport.totalComments}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalMessages" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Messages</Typography>
+                        <Typography variant="h5">{managerialReport.totalMessages}</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid key="mgr_totalApplications" size={{ xs: 12, sm: 6, md: 3 }}>
+                    <Card>
+                      <CardContent>
+                        <Typography color="textSecondary">Total Applications</Typography>
+                        <Typography variant="h5">{managerialReport.totalApplications}</Typography>
+                      </CardContent>
+                    </Card>
                   </Grid>
                 </Grid>
-              </Card>
-
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Recent Warnings
-              </Typography>
-              <TableContainer component={Paper}>
-                <Table>
-                  <TableHead>
-                    <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                      <TableCell>User</TableCell>
-                      <TableCell>Reason</TableCell>
-                      <TableCell>Issued Date</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {recentWarnings.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                          <Typography color="textSecondary">
-                            No warnings issued
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      recentWarnings.map((warning) => (
-                        <TableRow key={warning.id}>
-                          <TableCell>{warning.user}</TableCell>
-                          <TableCell>{warning.reason}</TableCell>
-                          <TableCell>{warning.issuedDate}</TableCell>
-                          <TableCell>{warning.status}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              )}
             </Box>
           </TabPanel>
 
-          {/* TAB 4: User Management */}
+          {/* TAB 4: Rooms */}
+                    {/* TAB 4: Rooms */}
           <TabPanel value={tabValue} index={4}>
             <Box>
-              <Typography variant="h6" sx={{ mb: 3 }}>
-                User Management
-              </Typography>
-
-              <TextField
-                fullWidth
-                placeholder="Search users by name, username, or email..."
-                value={userSearchQuery}
-                onChange={(e) => setUserSearchQuery(e.target.value)}
-                sx={{ mb: 3 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search />
-                    </InputAdornment>
-                  ),
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 3,
                 }}
-              />
+              >
+                <Typography variant="h6">Room Management</Typography>
+                <Box>
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => setAddRoomDialogOpen(true)}
+                    sx={{ mr: 1 }}
+                  >
+                    Add Room
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={fetchRooms}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? <CircularProgress size={20} /> : "Refresh"}
+                  </Button>
+                </Box>
+              </Box>
+
+              {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
+              {successMessage && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  {successMessage}
+                </Alert>
+              )}
 
               <TableContainer component={Paper}>
                 <Table>
                   <TableHead>
                     <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                      <TableCell></TableCell>
                       <TableCell>Name</TableCell>
-                      <TableCell>Username</TableCell>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Role</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Actions</TableCell>
+                      <TableCell>Capacity</TableCell>
+                      <TableCell>Location</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {users.length === 0 ? (
+                    {roomsList.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
                           <Typography color="textSecondary">
-                            No users to display
+                            No rooms available
                           </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
-                      users.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell>{user.name}</TableCell>
-                          <TableCell>{user.username}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>{user.role}</TableCell>
-                          <TableCell>{user.status}</TableCell>
-                          <TableCell>
-                            <Button
-                              size="small"
-                              onClick={() => handleToggleUserStatus(user.id)}
-                            >
-                              Update
-                            </Button>
-                          </TableCell>
+                      roomsList.map((room) => (
+                        <TableRow key={room.id}>
+                          <TableCell>{room.id}</TableCell>
+                          <TableCell>{room.name}</TableCell>
+                          <TableCell>{room.capacity}</TableCell>
+                          <TableCell>{room.location || "-"}</TableCell>
                         </TableRow>
                       ))
                     )}
                   </TableBody>
                 </Table>
               </TableContainer>
+
+              <Dialog
+                open={addRoomDialogOpen}
+                onClose={() => {
+                  setAddRoomDialogOpen(false);
+                  setRoomName("");
+                  setRoomCapacity(0);
+                  setRoomLocation("");
+                }}
+                maxWidth="sm"
+                fullWidth
+              >
+                <DialogTitle>Add New Room</DialogTitle>
+                <DialogContent>
+                  <Box sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <TextField
+                      fullWidth
+                      label="Room Name"
+                      value={roomName}
+                      onChange={(e) => setRoomName(e.target.value)}
+                      required
+                    />
+                    <TextField
+                      fullWidth
+                      label="Capacity"
+                      type="number"
+                      value={roomCapacity}
+                      onChange={(e) => setRoomCapacity(parseInt(e.target.value) || 0)}
+                      required
+                    />
+                    <TextField
+                      fullWidth
+                      label="Location (Optional)"
+                      value={roomLocation}
+                      onChange={(e) => setRoomLocation(e.target.value)}
+                    />
+                  </Box>
+                </DialogContent>
+                <DialogActions>
+                  <Button
+                    onClick={() => {
+                      setAddRoomDialogOpen(false);
+                      setRoomName("");
+                      setRoomCapacity(0);
+                      setRoomLocation("");
+                    }}
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleAddRoom}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? <CircularProgress size={20} /> : "Add Room"}
+                  </Button>
+                </DialogActions>
+              </Dialog>
             </Box>
           </TabPanel>
-          <TabPanel value={tabValue} index={5}></TabPanel>
         </CardContent>
       </Card>
     </Box>

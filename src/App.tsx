@@ -4,6 +4,7 @@ import { NotificationProvider } from "./context/NotificationContext";
 import Login from "./pages/Auth/Login";
 import Register from "./pages/Auth/Register";
 import Dashboard from "./pages/Dashboard/Dashboard";
+import Feed from "./pages/Feed/Feed";
 import TeamsList from "./pages/Teams/TeamsList";
 import EventsList from "./pages/Events/EventsList";
 import ChatPage from "./pages/Chat/ChatPage";
@@ -26,7 +27,9 @@ function App() {
         {/* Protected Routes */}
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Feed />} />
+            <Route path="/feed" element={<Feed />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/teams" element={<TeamsList />} />
             <Route path="/teams/:id" element={<TeamDetails />} />
             <Route path="/events" element={<EventsList />} />

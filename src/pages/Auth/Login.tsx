@@ -18,6 +18,7 @@ import {
 import { Visibility, VisibilityOff, Email, Lock } from '@mui/icons-material';
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import Snowfall from 'react-snowfall'
 
 const schema = z.object({
   email: z.string().email('Invalid email address'),
@@ -64,7 +65,9 @@ export default function Login() {
         p: 2,
       }}
     >
+      <Snowfall />
       <Container maxWidth="sm">
+        
         <Paper
           elevation={10}
           sx={{
@@ -77,12 +80,29 @@ export default function Login() {
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
           }}
         >
-          <Typography component="h1" variant="h4" fontWeight="bold" color="primary" gutterBottom>
-            Welcome Back
-          </Typography>
-          <Typography variant="body1" color="textSecondary" sx={{ mb: 4 }}>
-            Sign in to your account to continue
-          </Typography>
+          
+            <Typography 
+                variant="h1" 
+                sx={{ 
+                    mb: 4, 
+                    fontWeight: 'bold',
+                    color: '#1976d2',
+                    textAlign: 'center',
+                }}
+            >
+                Welcome to 
+            </Typography>
+        <Typography 
+                variant="h1" 
+                sx={{ 
+                    mb: 4, 
+                    fontWeight: 'bold',
+                    color: '#1976d2',
+                    textAlign: 'center',
+                }}
+            >
+                Uni<span style={{color:"gold"}}>+</span>
+            </Typography>
 
           {error && <Alert severity="error" sx={{ width: '100%', mb: 2 }}>{error}</Alert>}
 

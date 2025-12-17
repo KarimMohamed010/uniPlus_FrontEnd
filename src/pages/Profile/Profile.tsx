@@ -723,7 +723,15 @@ export default function Profile() {
                 <Grid size={{ xs: 12, md: 6 }} key={post.id}>
                   <Card>
                     <CardContent>
-                      <Typography variant="subtitle2" color="text.secondary">
+                      <Typography
+                        variant="subtitle2"
+                        color="text.secondary"
+                        sx={{
+                          cursor: "pointer",
+                          "&:hover": { textDecoration: "underline" },
+                        }}
+                        onClick={() => navigate(`/teams/${post.team.id}`)}
+                      >
                         {post.team.name}
                       </Typography>
                       <Typography variant="body1" sx={{ mt: 1 }}>
@@ -755,7 +763,16 @@ export default function Profile() {
                 <Grid size={{ xs: 12, sm: 6, md: 4 }} key={team.id}>
                   <Card>
                     <CardContent>
-                      <Typography variant="h6">{team.name}</Typography>
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          cursor: "pointer",
+                          "&:hover": { textDecoration: "underline" },
+                        }}
+                        onClick={() => navigate(`/teams/${team.id}`)}
+                      >
+                        {team.name}
+                      </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {team.description}
                       </Typography>
