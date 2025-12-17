@@ -25,6 +25,7 @@ import {
 import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
+  Home as HomeIcon,
   Group as GroupIcon,
   Event as EventIcon,
   Chat as ChatIcon,
@@ -86,11 +87,12 @@ export default function Layout() {
   };
 
   const navItems = [
-    { text: "Dashboard", icon: <DashboardIcon />, path: "/" },
+    { text: "Home Feed", icon: <HomeIcon />, path: "/" },
+    { text: "Dashboard", icon: <DashboardIcon />, path: "/dashboard" },
     { text: "Teams", icon: <GroupIcon />, path: "/teams" },
     { text: "Events", icon: <EventIcon />, path: "/events" },
     { text: "Chat", icon: <ChatIcon />, path: "/chat" },
-    ...(user?.roles.global === "student" ? [{ text: "Rides", icon: <DirectionsCar />, path: "/Rides" }] : []),
+    ...(user?.roles.global === "student" ? [{ text: "Rides", icon: <DirectionsCar />, path: "/rides" }] : []),
     ...(user?.roles.global === "admin"
       ? [{ text: "Admin", icon: <AdminIcon />, path: "/admin" }]
       : []),

@@ -4,7 +4,11 @@ import client from "../../api/client";
 import { useForm } from "react-hook-form";
 import {
   Typography,
+  Avatar,
   Box,
+  Card,
+  CardContent,
+  CardHeader,
   CircularProgress,
   Paper,
   Tabs,
@@ -20,6 +24,17 @@ import {
   ListItemText,
   Chip,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import {
@@ -35,6 +50,9 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import EventsList from "../Events/EventsList";
+import { useNavigate } from "react-router-dom";
+import { FileUploaderRegular } from "@uploadcare/react-uploader";
+import "@uploadcare/react-uploader/core.css";
 
 // --- Styled Components for the Layout ---
 const TeamBanner = styled(Box)(({ theme }) => ({
@@ -100,17 +118,62 @@ interface LeaderProfile {
   email: string;
 }
 
+interface TeamPost {
+  id: number;
+  description: string;
+  issuedAt: string;
+  author: { id: number; fname: string; lname: string; imgUrl?: string };
+  media: Array<{ url: string; type: string; description?: string }>;
+}
+
+type NewPostMediaItem = {
+  url: string;
+  type: string;
+  description?: string;
+};
+
 export default function TeamDetails() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [openEdit, setOpenEdit] = useState(false);
   const [tabValue, setTabValue] = useState(0);
+
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsError, setReportsError] = useState("");
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportType, setReportType] = useState<"participation" | "engagement">(
+    "participation"
+  );
+  const [reportScope, setReportScope] = useState<"event" | "team">("event");
+  const [timeRange, setTimeRange] = useState<"week" | "month" | "year" | "all">(
+    "month"
+  );
+  const [reportData, setReportData] = useState<
+    Array<{
+      id: string | number;
+      name: string;
+      participants: number;
+      attendanceRate?: number;
+      engagementScore?: number;
+      totalInteractions?: number;
+      date: string;
+    }>
+  >([]);
+
+  const [createPostOpen, setCreatePostOpen] = useState(false);
+  const [newPostText, setNewPostText] = useState("");
+  const [createPostError, setCreatePostError] = useState("");
+  const [newPostMedia, setNewPostMedia] = useState<NewPostMediaItem[]>([]);
 
   const userJsonString = localStorage.getItem("user");
   const userID = userJsonString
     ? parseInt(JSON.parse(userJsonString).id, 10)
     : 0; // 1. Fetch Team Details
+
+  const userGlobalRole = userJsonString ? JSON.parse(userJsonString).roles?.global : undefined;
+  const isAdmin = userGlobalRole === "admin";
 
   const {
     data: team,
@@ -126,6 +189,14 @@ export default function TeamDetails() {
   });
 
   const isLeader = userID === team?.leaderId; // 2. Fetch Team Members
+
+  const { data: mySubscribedTeams } = useQuery<any[]>({
+    queryKey: ["mySubscribedTeams"],
+    queryFn: async () => {
+      const res = await client.get("/teams/my-subscribed");
+      return Array.isArray(res.data) ? res.data : [];
+    },
+  });
 
   const {
     data: teamMembers,
@@ -164,6 +235,8 @@ export default function TeamDetails() {
     ? teamMembers.some((member) => member.id === userID)
     : false; // Filter members into categories
 
+  const isSubscribed = !!mySubscribedTeams?.some((t: any) => t?.id === team?.id);
+
   const organizersArray: TeamMember[] =
     teamMembers?.filter((member) => member.role === "organizer") || [];
   const hrArray: TeamMember[] =
@@ -177,6 +250,47 @@ export default function TeamDetails() {
   const isMediaTeam =
     !isLeader && mediaTeamArray.some((member) => member.id === userID); // --- Handlers ---
 
+  const {
+    data: teamPosts,
+    isLoading: isPostsLoading,
+    error: postsError,
+  } = useQuery<TeamPost[]>({
+    queryKey: ["teamPosts", id],
+    queryFn: async () => {
+      const res = await client.get(`/posts/team/${id}`);
+      return Array.isArray(res.data?.posts) ? (res.data.posts as TeamPost[]) : [];
+    },
+    enabled: !!id,
+  });
+
+  const canCreatePost = isAdmin || isLeader || isOrganizer || isMediaTeam;
+
+  const createPostMutation = useMutation({
+    mutationFn: async () => {
+      setCreatePostError("");
+      if (!id) throw new Error("Missing team id");
+      const text = newPostText.trim();
+      if (!text) throw new Error("Post content is required");
+      await client.post("/posts", {
+        description: text,
+        teamId: Number(id),
+        media: newPostMedia,
+      });
+    },
+    onSuccess: () => {
+      setCreatePostOpen(false);
+      setNewPostText("");
+      setNewPostMedia([]);
+      queryClient.invalidateQueries({ queryKey: ["teamPosts", id] });
+      queryClient.invalidateQueries({ queryKey: ["feedPosts"] });
+    },
+    onError: (e: any) => {
+      setCreatePostError(
+        e?.response?.data?.error || e?.message || "Failed to create post"
+      );
+    },
+  });
+
   const handleCreateEvent = () => {
     prompt("Action: Open Create Event Form");
   };
@@ -188,9 +302,32 @@ export default function TeamDetails() {
   const handleLeaveAction = () => {
     prompt("Action: Leave Team");
   };
-  const handleSubscribeAction =()=>{
-    prompt("Action: Subscribe to Team");
-  }
+  const subscribeMutation = useMutation({
+    mutationFn: async () => {
+      return await client.post(`/teams/${id}/subscribe`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mySubscribedTeams"] });
+    },
+  });
+
+  const unsubscribeMutation = useMutation({
+    mutationFn: async () => {
+      return await client.delete(`/teams/${id}/subscribe`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mySubscribedTeams"] });
+    },
+  });
+
+  const handleSubscribeAction = () => {
+    if (!id) return;
+    if (isSubscribed) {
+      unsubscribeMutation.mutate();
+    } else {
+      subscribeMutation.mutate();
+    }
+  };
 
 
   const handleEditAction = () => {
@@ -199,6 +336,51 @@ export default function TeamDetails() {
     }
     setOpenEdit(true);
   }; // --- Tabs Logic ---
+
+  const canViewReports = isAdmin || isLeader || isOrganizer;
+
+  const fetchTeamReport = async () => {
+    if (!id) return;
+    try {
+      setReportsLoading(true);
+      setReportsError("");
+
+      const reportPath =
+        reportType === "participation"
+          ? `/reports/teams/${id}/participation`
+          : `/reports/teams/${id}/engagement`;
+
+      const response = await client.get(
+        reportPath,
+        {
+          params: {
+            scope: reportScope,
+            timeRange,
+          },
+        }
+      );
+
+      const apiData = response.data.data || [];
+      const formattedData = apiData.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        participants: item.participants || 0,
+        attendanceRate: item.attendanceRate,
+        engagementScore: item.engagementScore,
+        totalInteractions: item.totalInteractions,
+        date: item.date || new Date().toISOString().split("T")[0],
+      }));
+
+      setReportData(formattedData);
+    } catch (error: any) {
+      console.error("Failed to load team report:", error);
+      const errorMessage =
+        error.response?.data?.error || "Failed to load report.";
+      setReportsError(errorMessage);
+    } finally {
+      setReportsLoading(false);
+    }
+  };
 
   const fixedTabs = [
     { label: "Posts", id: "posts" },
@@ -357,7 +539,7 @@ export default function TeamDetails() {
             startIcon={<Add />}
             onClick={handleSubscribeAction}
           >
-            Subscribe
+            {isSubscribed ? "Unsubscribe" : "Subscribe"}
           </Button>
         )}
         {/* Button: Apply to Join (If NOT a member) */}
@@ -384,8 +566,156 @@ export default function TeamDetails() {
             Leave Team
           </Button>
         )}
+
+        {canViewReports && (
+          <Button
+            sx={{ ml: 2 }}
+            variant="contained"
+            color="primary"
+            onClick={() => {
+              setReportsOpen(true);
+              setReportData([]);
+              setReportsError("");
+              fetchTeamReport();
+            }}
+          >
+            Reports
+          </Button>
+        )}
         
       </Box>
+
+      <Dialog
+        open={reportsOpen}
+        onClose={() => setReportsOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Team Reports</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          {reportsError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {reportsError}
+            </Alert>
+          )}
+
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel id="team-report-type">Report</InputLabel>
+              <Select
+                labelId="team-report-type"
+                label="Report"
+                value={reportType}
+                onChange={(e) => setReportType(e.target.value as any)}
+              >
+                <MenuItem value="participation">Participation</MenuItem>
+                <MenuItem value="engagement">Engagement</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth>
+              <InputLabel id="team-report-scope">Scope</InputLabel>
+              <Select
+                labelId="team-report-scope"
+                label="Scope"
+                value={reportScope}
+                onChange={(e) => setReportScope(e.target.value as any)}
+              >
+                <MenuItem value="event">Per Event</MenuItem>
+                <MenuItem value="team">Team Overall</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth>
+              <InputLabel id="team-report-range">Time Range</InputLabel>
+              <Select
+                labelId="team-report-range"
+                label="Time Range"
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value as any)}
+              >
+                <MenuItem value="week">Last Week</MenuItem>
+                <MenuItem value="month">Last Month</MenuItem>
+                <MenuItem value="year">Last Year</MenuItem>
+                <MenuItem value="all">All</MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
+
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                  <TableCell>Name</TableCell>
+                  {reportType === "participation" ? (
+                    <>
+                      <TableCell align="right">Participants</TableCell>
+                      <TableCell align="right">Attendance Rate</TableCell>
+                    </>
+                  ) : (
+                    <>
+                      <TableCell align="right">Participants</TableCell>
+                      <TableCell align="right">Engagement</TableCell>
+                      <TableCell align="right">Feedback Count</TableCell>
+                    </>
+                  )}
+                  <TableCell align="right">Date</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {reportsLoading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={reportType === "participation" ? 4 : 5}
+                      align="center"
+                      sx={{ py: 4 }}
+                    >
+                      <CircularProgress size={24} />
+                    </TableCell>
+                  </TableRow>
+                ) : reportData.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={reportType === "participation" ? 4 : 5}
+                      align="center"
+                      sx={{ py: 4 }}
+                    >
+                      <Typography color="textSecondary">No data</Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  reportData.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.name}</TableCell>
+                      {reportType === "participation" ? (
+                        <>
+                          <TableCell align="right">{item.participants}</TableCell>
+                          <TableCell align="right">{item.attendanceRate ?? 0}%</TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell align="right">{item.participants}</TableCell>
+                          <TableCell align="right">{item.engagementScore ?? 0}</TableCell>
+                          <TableCell align="right">{item.totalInteractions ?? 0}</TableCell>
+                        </>
+                      )}
+                      <TableCell align="right">
+                        {item.date ? new Date(item.date).toLocaleDateString() : "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReportsOpen(false)}>Close</Button>
+          <Button variant="contained" onClick={fetchTeamReport} disabled={reportsLoading}>
+            Refresh
+          </Button>
+        </DialogActions>
+      </Dialog>
       {/* 2. Navigation Tabs (Dynamic) */} 
       <Paper sx={{ mb: 3 }} square={true}>
         <Tabs
@@ -401,13 +731,84 @@ export default function TeamDetails() {
       </Paper>
       {/* 3. Tab Content */} {/* Tab: Posts */} 
       <TabPanel value={tabValue} index={tabIndexMap["posts"]}>
-        <Typography variant="h5">Team Posts Feed</Typography>
-        <Paper sx={{ p: 3, mt: 2 }}>
-          <Typography>
-            Here you will render the list of posts for Team:
-            {team.name}
-          </Typography>
-        </Paper>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="h5">Team Posts</Typography>
+          {canCreatePost && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => setCreatePostOpen(true)}
+            >
+              Create Post
+            </Button>
+          )}
+        </Stack>
+
+        <Box sx={{ mt: 2 }}>
+          {isPostsLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+              <CircularProgress />
+            </Box>
+          ) : postsError ? (
+            <Alert severity="error">Failed to load team posts.</Alert>
+          ) : (teamPosts || []).length === 0 ? (
+            <Paper sx={{ p: 3 }}>
+              <Typography color="text.secondary">No posts yet.</Typography>
+            </Paper>
+          ) : (
+            <Stack spacing={2}>
+              {(teamPosts || []).map((post) => (
+                <Card key={post.id} variant="outlined">
+                  <CardHeader
+                    avatar={
+                      <Avatar src={post.author?.imgUrl}>
+                        {(post.author?.fname || "U").charAt(0)}
+                      </Avatar>
+                    }
+                    title={
+                      <Typography
+                        sx={{
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          "&:hover": { textDecoration: "underline" },
+                        }}
+                        onClick={() => navigate(`/profile/${post.author?.id}`)}
+                      >
+                        {post.author?.fname} {post.author?.lname}
+                      </Typography>
+                    }
+                    subheader={
+                      post.issuedAt ? new Date(post.issuedAt).toLocaleString() : ""
+                    }
+                  />
+                  <CardContent sx={{ pt: 0 }}>
+                    <Typography sx={{ whiteSpace: "pre-wrap" }}>
+                      {post.description}
+                    </Typography>
+
+                    {Array.isArray(post.media) && post.media.length > 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Box
+                          component="img"
+                          src={post.media[0].url}
+                          alt="post media"
+                          sx={{
+                            width: "100%",
+                            maxHeight: 360,
+                            objectFit: "cover",
+                            borderRadius: 2,
+                            border: "1px solid",
+                            borderColor: "divider",
+                          }}
+                        />
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>
+          )}
+        </Box>
         
       </TabPanel>
       {/* Tab: Events */} 
@@ -561,6 +962,94 @@ export default function TeamDetails() {
           </form>
         </Dialog>
       )}
+
+      <Dialog
+        open={createPostOpen}
+        onClose={() => setCreatePostOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Create Post</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          {createPostError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {createPostError}
+            </Alert>
+          )}
+
+          <TextField
+            label="What's new?"
+            fullWidth
+            multiline
+            minRows={4}
+            value={newPostText}
+            onChange={(e) => setNewPostText(e.target.value)}
+          />
+
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+              Media
+            </Typography>
+            <FileUploaderRegular
+              sourceList="local,camera,gdrive"
+              classNameUploader="uc-light"
+              pubkey="1ed9d5259738cb825f1c"
+              multiple={true}
+              onChange={(items: any) => {
+                const entries = (items?.allEntries || []) as any[];
+                const uploaded = entries
+                  .filter((f) => f?.status === "success" && f?.cdnUrl)
+                  .map((f) => {
+                    const url = String(f.cdnUrl);
+                    const type =
+                      (f?.mimeType as string | undefined) ||
+                      (f?.fileInfo?.mimeType as string | undefined) ||
+                      "image";
+                    return { url, type } as NewPostMediaItem;
+                  });
+                setNewPostMedia(uploaded);
+              }}
+            />
+
+            {newPostMedia.length > 0 && (
+              <Stack spacing={1} sx={{ mt: 2 }}>
+                {newPostMedia.map((m) => (
+                  <Paper key={m.url} variant="outlined" sx={{ p: 1 }}>
+                    <Typography variant="caption" sx={{ display: "block" }}>
+                      {m.type}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", wordBreak: "break-all" }}
+                    >
+                      {m.url}
+                    </Typography>
+                  </Paper>
+                ))}
+              </Stack>
+            )}
+          </Box>
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ mt: 1, display: "block" }}
+          >
+            Posting is allowed for the team leader, organizers/media team, or admins.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreatePostOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => createPostMutation.mutate()}
+            disabled={createPostMutation.isPending}
+          >
+            Publish
+          </Button>
+        </DialogActions>
+      </Dialog>
       
     </Box>
   );
