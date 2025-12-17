@@ -263,7 +263,7 @@ export default function TeamDetails() {
     enabled: !!id,
   });
 
-  const canCreatePost = isAdmin || isLeader || isOrganizer || isMediaTeam;
+  const canCreatePost = isAdmin || isLeader || isOrganizer || isMediaTeam|| isSubscribed;
 
   const createPostMutation = useMutation({
     mutationFn: async () => {
@@ -1031,13 +1031,13 @@ export default function TeamDetails() {
             )}
           </Box>
 
-          <Typography
+          {/* <Typography
             variant="caption"
             color="text.secondary"
             sx={{ mt: 1, display: "block" }}
           >
             Posting is allowed for the team leader, organizers/media team, or admins.
-          </Typography>
+          </Typography> */}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreatePostOpen(false)}>Cancel</Button>

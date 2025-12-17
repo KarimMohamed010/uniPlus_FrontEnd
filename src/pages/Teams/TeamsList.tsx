@@ -19,7 +19,7 @@ import {
   InputAdornment,
 } from "@mui/material";
 import { Add } from "@mui/icons-material";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient,useQueries } from "@tanstack/react-query";
 import client from "../../api/client";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -27,12 +27,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
 import SearchIcon from "@mui/icons-material/Search";
 
-
 interface Team {
   id: number;
   name: string;
   description: string;
-  acceptanceStatus: string; // Used to filter 'My Teams' vs 'All Teams'
+  leaderId: number;
+  userStatus: {
+    isLeader: boolean;
+    isMember: boolean;
+    isSubscribed: boolean;
+  };
 }
 
 // --- TabPanel Component Definition (Moved here for clean scope) ---
@@ -72,6 +76,11 @@ export default function TeamsList() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  const userJsonString = localStorage.getItem("user");
+  const userID = userJsonString
+    ? parseInt(JSON.parse(userJsonString).id, 10)
+    : 0;
+
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
@@ -90,33 +99,65 @@ export default function TeamsList() {
     },
   });
 
-  // Function to filter by both acceptanceStatus AND team name
-  const filterTeams = (
-    teams: Team[] | undefined,
-    status: string | "discover"
-  ) => {
-    if (!teams) return [];
+  // 3. Fetch members for every team (Parallel Queries)
+  const memberQueries = useQueries({
+  queries: (allTeams || []).map((team) => ({
+    queryKey: ["teamMembers", team.id],
+    queryFn: async () => {
+      const res = await client.get(`/teams/${team.id}/members`);
+      return { 
+        teamId: team.id, 
+        members: res.data.members || [] 
+      };
+    },
+    enabled: !!allTeams, // Only run if we have teams
+  })),
+});
 
-    // 1. Filter by Status (My Teams vs Discover)
-    const statusFiltered =
-      status === "discover"
-        ? teams.filter((team) => team.acceptanceStatus !== "accepted")
-        : teams.filter((team) => team.acceptanceStatus === "accepted");
+// 2. Fetch My Subscribed Teams (The new part)
+const { data: subscribedTeams } = useQuery<Team[]>({
+  queryKey: ["mySubscribedTeams"],
+  queryFn: async () => (await client.get("/teams/my-subscribed")).data || [],
+});
 
-    // 2. Filter by Search Term
-    if (!searchTerm) {
-      return statusFiltered;
+
+ // 4. The Filter Logic (No Hooks inside here!)
+const filterAllTeams = () => {
+  if (!allTeams) return { myTeams: [], discoverTeams: [] };
+
+  // Create a Set of IDs I am subscribed to for fast lookup
+  const subscribedIds = new Set(subscribedTeams?.map(t => t.id) || []);
+
+  const myTeams: Team[] = [];
+  const discoverTeams: Team[] = [];
+
+  allTeams.forEach((team, index) => {
+    // Check A: Leadership
+    const isLeader = team.leaderId === userID;
+
+    // Check B: Membership (from the parallel queries)
+    const members = memberQueries[index].data?.members || [];
+    const isMember = members.some((m: any) => parseInt(m.studentId) === userID);
+
+    // Check C: Subscription (from the /my-subscribed endpoint)
+    const isSubscribed = subscribedIds.has(team.id);
+
+    // If I am ANY of these, it goes into "My Teams"
+    if (isLeader || isMember || isSubscribed) {
+      myTeams.push({
+        ...team,
+        userStatus: { isLeader, isMember, isSubscribed } // Useful for showing icons later!
+      });
+    } else {
+      discoverTeams.push(team);
     }
+  });
 
-    const lowerCaseSearch = searchTerm.toLowerCase();
+  return { myTeams, discoverTeams };
+};
 
-    return statusFiltered.filter((team) =>
-      team.name.toLowerCase().startsWith(lowerCaseSearch)
-    );
-  };
+const { myTeams, discoverTeams} = filterAllTeams();
 
-  const myTeams = filterTeams(allTeams, "accepted");
-  const discoverTeams = filterTeams(allTeams, "discover");
   // -------------------------------------------------------------------
 
   // ... (createTeamSchema, useForm, createMutation, handleCreate remains the same)
@@ -186,8 +227,12 @@ export default function TeamsList() {
                 {team.description}
               </Typography>
             </CardContent>
-            <CardActions sx={{ justifyContent: "flex-end", pr: 2, pb: 2 }}>
+            <CardActions sx={{ display:"flex",flexDirection:"column", p: 2 ,width:"100%"}}>
+              <Typography sx={{alignSelf:"start"}} color="secondary.dark">
+                {team.userStatus.isLeader? "Leader":team.userStatus.isMember? "Member":team.userStatus.isSubscribed? "Subscriber":""}
+              </Typography>
               <Button
+                sx={{alignSelf:"end",p:1 }}
                 size="small"
                 variant="text"
                 onClick={() => navigate(`/teams/${team.id}`)}
