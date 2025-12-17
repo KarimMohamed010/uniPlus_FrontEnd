@@ -35,6 +35,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  ImageList,
+  ImageListItem,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import {
@@ -53,6 +55,7 @@ import EventsList from "../Events/EventsList";
 import { useNavigate } from "react-router-dom";
 import { FileUploaderRegular } from "@uploadcare/react-uploader";
 import "@uploadcare/react-uploader/core.css";
+import FeedPostCard ,{type FeedPost} from '../../components/FeedPostCard'
 
 // --- Styled Components for the Layout ---
 const TeamBanner = styled(Box)(({ theme }) => ({
@@ -118,19 +121,13 @@ interface LeaderProfile {
   email: string;
 }
 
-interface TeamPost {
-  id: number;
-  description: string;
-  issuedAt: string;
-  author: { id: number; fname: string; lname: string; imgUrl?: string };
-  media: Array<{ url: string; type: string; description?: string }>;
-}
 
 type NewPostMediaItem = {
   url: string;
   type: string;
   description?: string;
 };
+
 
 export default function TeamDetails() {
   const { id } = useParams<{ id: string }>();
@@ -182,6 +179,15 @@ export default function TeamDetails() {
   const [eventBasePrice, setEventBasePrice] = useState<number>(0);
   const [createEventError, setCreateEventError] = useState("");
 
+  const [expandedComments, setExpandedComments] = useState<
+    Record<number, boolean>
+  >({});
+  const [commentDrafts, setCommentDrafts] = useState<Record<number, string>>(
+    {}
+  );
+  const [commentErrors, setCommentErrors] = useState<Record<number, string>>(
+    {}
+  );
   const userJsonString = localStorage.getItem("user");
   const userID = userJsonString
     ? parseInt(JSON.parse(userJsonString).id, 10)
@@ -273,19 +279,19 @@ export default function TeamDetails() {
     data: teamPosts,
     isLoading: isPostsLoading,
     error: postsError,
-  } = useQuery<TeamPost[]>({
+  } = useQuery<FeedPost[]>({
     queryKey: ["teamPosts", id],
     queryFn: async () => {
       const res = await client.get(`/posts/team/${id}`);
       return Array.isArray(res.data?.posts)
-        ? (res.data.posts as TeamPost[])
+        ? (res.data.posts as FeedPost[])
         : [];
     },
     enabled: !!id,
   });
 
   const canCreatePost =
-    isAdmin || isLeader || isOrganizer || isMediaTeam || isSubscribed;
+    isAdmin || isLeader || isOrganizer || isMediaTeam || isHR || isSubscribed;
 
   const createPostMutation = useMutation({
     mutationFn: async () => {
@@ -336,6 +342,46 @@ export default function TeamDetails() {
     },
   });
 
+  const { data: applications } = useQuery({
+    queryKey: ["teamApps", id],
+    queryFn: async () => {
+      // This calls the router.get("/teams/:teamId/applications", ...)
+      const res = await client.get(`/teams/${id}/applications`);
+      return res.data;
+    },
+    enabled: !!id,
+  });
+    const addCommentMutation = useMutation({
+    mutationFn: async ({
+      postId,
+      content,
+    }: {
+      postId: number;
+      content: string;
+    }) => {
+      await client.post("/comments", { postId, content });
+    },
+    onSuccess: (_data, variables) => {
+      setCommentDrafts((prev) => ({ ...prev, [variables.postId]: "" }));
+      queryClient.invalidateQueries({
+        queryKey: ["postComments", variables.postId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["feedPosts"] });
+    },
+    onError: (e: any, variables) => {
+      setCommentErrors((prev) => ({
+        ...prev,
+        [variables.postId]: e?.response?.data?.error || "Failed to add comment",
+      }));
+    },
+  });
+
+  const canComment = canCreatePost;
+  //
+  //
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////
+  //
+  //
   const handleCreateEvent = () => {
     setCreateEventOpen(true);
   };
@@ -466,9 +512,9 @@ export default function TeamDetails() {
   ];
 
   const conditionalTabs = [];
-  if (isMediaTeam || isLeader) {
-    conditionalTabs.push({ label: "Pending Posts", id: "pendingPosts" });
-  }
+  // if (isMediaTeam || isLeader) {
+  //   conditionalTabs.push({ label: "Pending Posts", id: "pendingPosts" });
+  // }
   if (isHR || isLeader) {
     conditionalTabs.push({ label: "Join Requests", id: "joinRequests" });
   }
@@ -850,57 +896,44 @@ export default function TeamDetails() {
             </Paper>
           ) : (
             <Stack spacing={2}>
-              {(teamPosts || []).map((post) => (
-                <Card key={post.id} variant="outlined">
-                  <CardHeader
-                    avatar={
-                      <Avatar src={post.author?.imgUrl}>
-                        {(post.author?.fname || "U").charAt(0)}
-                      </Avatar>
+             {(teamPosts || []).map((post) => {
+              const isOpen = !!expandedComments[post.id];
+              return (
+                <FeedPostCard
+                  key={post.id}
+                  post={post}
+                  isOpen={isOpen}
+                  onToggle={() =>
+                    setExpandedComments((prev) => ({
+                      ...prev,
+                      [post.id]: !prev[post.id],
+                    }))
+                  }
+                  commentDraft={commentDrafts[post.id] || ""}
+                  setCommentDraft={(value) =>
+                    setCommentDrafts((prev) => ({
+                      ...prev,
+                      [post.id]: value,
+                    }))
+                  }
+                  commentError={commentErrors[post.id]}
+                  clearCommentError={() =>
+                    setCommentErrors((prev) => ({ ...prev, [post.id]: "" }))
+                  }
+                  canComment={canComment && !addCommentMutation.isPending}
+                  onSubmitComment={(content) => {
+                    if (!content) {
+                      setCommentErrors((prev) => ({
+                        ...prev,
+                        [post.id]: "Comment can't be empty",
+                      }));
+                      return;
                     }
-                    title={
-                      <Typography
-                        sx={{
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          "&:hover": { textDecoration: "underline" },
-                        }}
-                        onClick={() => navigate(`/profile/${post.author?.id}`)}
-                      >
-                        {post.author?.fname} {post.author?.lname}
-                      </Typography>
-                    }
-                    subheader={
-                      post.issuedAt
-                        ? new Date(post.issuedAt).toLocaleString()
-                        : ""
-                    }
-                  />
-                  <CardContent sx={{ pt: 0 }}>
-                    <Typography sx={{ whiteSpace: "pre-wrap" }}>
-                      {post.description}
-                    </Typography>
-
-                    {Array.isArray(post.media) && post.media.length > 0 && (
-                      <Box sx={{ mt: 2 }}>
-                        <Box
-                          component="img"
-                          src={post.media[0].url}
-                          alt="post media"
-                          sx={{
-                            width: "100%",
-                            maxHeight: 360,
-                            objectFit: "cover",
-                            borderRadius: 2,
-                            border: "1px solid",
-                            borderColor: "divider",
-                          }}
-                        />
-                      </Box>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+                    addCommentMutation.mutate({ postId: post.id, content });
+                  }}
+                />
+              );
+            })}
             </Stack>
           )}
         </Box>
@@ -969,7 +1002,7 @@ export default function TeamDetails() {
         )}
       </TabPanel>
       {/* Conditional Tab: Pending Posts (Media Team/Leader Only) */}
-      {(isMediaTeam || isLeader) && (
+      {/* {(isMediaTeam || isLeader) && (
         <TabPanel value={tabValue} index={tabIndexMap["pendingPosts"]}>
           <Typography
             variant="h5"
@@ -985,7 +1018,7 @@ export default function TeamDetails() {
             </Typography>
           </Paper>
         </TabPanel>
-      )}
+      )} */}
       {/* Conditional Tab: Join Requests (HR Team/Leader Only) */}
       {(isHR || isLeader) && (
         <TabPanel value={tabValue} index={tabIndexMap["joinRequests"]}>
