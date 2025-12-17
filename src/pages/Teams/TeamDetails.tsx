@@ -554,7 +554,7 @@ export default function TeamDetails() {
             Apply to Join
           </Button>
         )}
-        {/* Button: Leave Team (If IS a member AND NOT the leader) */}    
+        {/* Button: Leave Team (If IS a member AND NOT the leader) */}
         {isMember && !isLeader && (
           <Button
             sx={{ ml: "auto" }}
