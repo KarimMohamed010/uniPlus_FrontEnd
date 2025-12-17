@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Typography,
   Box,
@@ -19,33 +19,35 @@ import {
   InputAdornment,
 } from "@mui/material";
 import { Add } from "@mui/icons-material";
-import { useQuery, useMutation, useQueryClient,useQueries } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import client from "../../api/client";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
 import SearchIcon from "@mui/icons-material/Search";
+import { min } from "date-fns";
 
+// --- Interfaces ---
 interface Team {
   id: number;
   name: string;
   description: string;
   leaderId: number;
-  userStatus: {
+  userStatus?: {
     isLeader: boolean;
     isMember: boolean;
     isSubscribed: boolean;
   };
 }
 
-// --- TabPanel Component Definition (Moved here for clean scope) ---
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
   value: number;
 }
 
+// --- TabPanel Component ---
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
   return (
@@ -60,7 +62,6 @@ function TabPanel(props: TabPanelProps) {
     </div>
   );
 }
-// -------------------------------------------------------------------
 
 const createTeamSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -71,123 +72,122 @@ type CreateTeamData = z.infer<typeof createTeamSchema>;
 
 export default function TeamsList() {
   const [openCreate, setOpenCreate] = useState(false);
-  const [tabValue, setTabValue] = useState(0); //  State for tab control
-  const [searchTerm, setSearchTerm] = useState(""); //  State for search
+  const [tabValue, setTabValue] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const userJsonString = localStorage.getItem("user");
-  const userID = userJsonString
-    ? parseInt(JSON.parse(userJsonString).id, 10)
-    : 0;
+  const userID = userJsonString ? parseInt(JSON.parse(userJsonString).id, 10) : 0;
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
-
-  //  Handler for updating the search term
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value);
-  };
+  // --- 1. Data Fetching ---
 
   // Fetch All Teams
-  const { data: allTeams, isLoading } = useQuery<Team[]>({
+  const { data: allTeams, isLoading: teamsLoading } = useQuery<Team[]>({
     queryKey: ["teams"],
     queryFn: async () => {
-      const res = await client.get("/teams"); // Fetches ALL teams, regardless of join status
+      const res = await client.get("/teams");
       return res.data;
     },
   });
 
-  // 3. Fetch members for every team (Parallel Queries)
+  // Fetch Subscribed Teams
+  const { data: subscribedTeams } = useQuery<Team[]>({
+    queryKey: ["mySubscribedTeams"],
+    queryFn: async () => (await client.get("/teams/my-subscribed")).data || [],
+  });
+
+  // Fetch Members for every team in parallel
   const memberQueries = useQueries({
-  queries: (allTeams || []).map((team) => ({
-    queryKey: ["teamMembers", team.id],
-    queryFn: async () => {
-      const res = await client.get(`/teams/${team.id}/members`);
-      return { 
-        teamId: team.id, 
-        members: res.data.members || [] 
-      };
-    },
-    enabled: !!allTeams, // Only run if we have teams
-  })),
-});
+    queries: (allTeams || []).map((team) => ({
+      queryKey: ["teamMembers", team.id],
+      queryFn: async () => {
+        const res = await client.get(`/teams/${team.id}/members`);
+        return {
+          teamId: team.id,
+          members: res.data.members || [],
+        };
+      },
+      enabled: !!allTeams,
+    })),
+  });
 
-// 2. Fetch My Subscribed Teams (The new part)
-const { data: subscribedTeams } = useQuery<Team[]>({
-  queryKey: ["mySubscribedTeams"],
-  queryFn: async () => (await client.get("/teams/my-subscribed")).data || [],
-});
+  // --- 2. Filter & Search Logic ---
 
+ const { filteredMyTeams, filteredDiscoverTeams } = useMemo(() => {
+  if (!allTeams) return { filteredMyTeams: [], filteredDiscoverTeams: [] };
 
- // 4. The Filter Logic (No Hooks inside here!)
-const filterAllTeams = () => {
-  if (!allTeams) return { myTeams: [], discoverTeams: [] };
-
-  // Create a Set of IDs I am subscribed to for fast lookup
-  const subscribedIds = new Set(subscribedTeams?.map(t => t.id) || []);
-
+  const subscribedIds = new Set(subscribedTeams?.map((t) => t.id) || []);
   const myTeams: Team[] = [];
   const discoverTeams: Team[] = [];
 
+  // 1. Process and Categorize
   allTeams.forEach((team, index) => {
-    // Check A: Leadership
     const isLeader = team.leaderId === userID;
-
-    // Check B: Membership (from the parallel queries)
-    const members = memberQueries[index].data?.members || [];
-    const isMember = members.some((m: any) => parseInt(m.studentId) === userID);
-
-    // Check C: Subscription (from the /my-subscribed endpoint)
+    const teamMembersData = memberQueries[index]?.data?.members || [];
+    const isMember = teamMembersData.some((m: any) => parseInt(m.studentId, 10) === userID);
     const isSubscribed = subscribedIds.has(team.id);
 
-    // If I am ANY of these, it goes into "My Teams"
+    const enrichedTeam = {
+      ...team,
+      userStatus: { isLeader, isMember, isSubscribed },
+    };
+
     if (isLeader || isMember || isSubscribed) {
-      myTeams.push({
-        ...team,
-        userStatus: { isLeader, isMember, isSubscribed } // Useful for showing icons later!
-      });
+      myTeams.push(enrichedTeam);
     } else {
-      discoverTeams.push(team);
+      discoverTeams.push(enrichedTeam);
     }
   });
 
-  return { myTeams, discoverTeams };
-};
+  // 2. Search Filter Function
+  const searchFilter = (t: Team) => {
+    const lowerSearch = searchTerm.toLowerCase();
+    return (
+      t.name.toLowerCase().startsWith(lowerSearch) ||
+      (t.description?.toLowerCase().startsWith(lowerSearch) ?? false)
+    );
+  };
 
-const { myTeams, discoverTeams} = filterAllTeams();
+  // 3. Priority Sorting Helper
+  // We assign a numeric weight: Leader (3), Member (2), Subscriber (1)
+  const getPriority = (t: Team) => {
+    if (t.userStatus?.isLeader) return 3;
+    if (t.userStatus?.isMember) return 2;
+    if (t.userStatus?.isSubscribed) return 1;
+    return 0;
+  };
 
-  // -------------------------------------------------------------------
+  return {
+    // Sort by priority (highest weight first), then reverse the final filtered list
+    filteredMyTeams: myTeams
+      .filter(searchFilter)
+      .sort((a, b) => getPriority(b) - getPriority(a)), // Sorting Lead > Member > Sub
+    
+    filteredDiscoverTeams: discoverTeams.filter(searchFilter).reverse(), // Reversed as requested
+  };
+}, [allTeams, subscribedTeams, memberQueries, userID, searchTerm]);
 
-  // ... (createTeamSchema, useForm, createMutation, handleCreate remains the same)
+  // --- 3. Handlers ---
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<CreateTeamData>({
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => setTabValue(newValue);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value);
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateTeamData>({
     resolver: zodResolver(createTeamSchema),
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: CreateTeamData) => {
-      return await client.post("/teams", data);
-    },
+    mutationFn: (data: CreateTeamData) => client.post("/teams", data),
     onSuccess: () => {
-      // Invalidate both lists if necessary, but "teams" should be enough
       queryClient.invalidateQueries({ queryKey: ["teams"] });
       setOpenCreate(false);
       reset();
     },
   });
 
-  const handleCreate = (data: CreateTeamData) => {
-    createMutation.mutate(data);
-  };
+  // --- 4. Render Helpers ---
 
-  // --- Reusable Team Card Renderer ---
   const renderTeamCards = (teamsToDisplay: Team[]) => (
     <Grid container spacing={3}>
       {teamsToDisplay.map((team) => (
@@ -198,43 +198,29 @@ const { myTeams, discoverTeams} = filterAllTeams();
               height: "100%",
               display: "flex",
               flexDirection: "column",
-              transition: "transform 0.2s, box-shadow 0.2s",
-              "&:hover": {
-                transform: "translateY(-4px)",
-                boxShadow: 6,
-              },
+              transition: "0.2s",
+              "&:hover": { transform: "translateY(-4px)", boxShadow: 6 },
+              
             }}
           >
             <CardContent sx={{ flexGrow: 1 }}>
-              <Typography
-                variant="h5"
-                component="div"
-                sx={{ mb: 1, color: "text.primary" }}
-              >
-                {team.name}
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: "vertical",
-                }}
-              >
+              <Typography variant="h5" sx={{ mb: 1 }}>{team.name}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{
+                display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden"
+              }}>
                 {team.description}
               </Typography>
             </CardContent>
-            <CardActions sx={{ display:"flex",flexDirection:"column", p: 2 ,width:"100%"}}>
-              <Typography sx={{alignSelf:"start"}} color="secondary.dark">
-                {team.userStatus.isLeader? "Leader":team.userStatus.isMember? "Member":team.userStatus.isSubscribed? "Subscriber":""}
+            <CardActions sx={{ display: "flex", gap:"min(1em,20%)", p: 2, alignItems: "flex-start" }}>
+              <Typography variant="caption" color="secondary.dark" sx={{ fontWeight: 'bold', mb: 1 }}>
+                {team.userStatus?.isLeader ? "LEADER" : 
+                 team.userStatus?.isMember ? "MEMBER" : 
+                 team.userStatus?.isSubscribed ? "SUBSCRIBER" : ""}
               </Typography>
               <Button
-                sx={{alignSelf:"end",p:1 }}
                 size="small"
-                variant="text"
+                variant="outlined"
+                fullWidth
                 onClick={() => navigate(`/teams/${team.id}`)}
               >
                 View Details
@@ -245,18 +231,15 @@ const { myTeams, discoverTeams} = filterAllTeams();
       ))}
       {teamsToDisplay.length === 0 && (
         <Typography sx={{ mt: 2, ml: 2 }} color="text.secondary">
-          {tabValue === 0
-            ? "You have not joined any teams yet."
-            : "No other teams found for discovery."}
+          {searchTerm ? `No teams found matching "${searchTerm}"` : "No teams available."}
         </Typography>
       )}
     </Grid>
   );
-  // ------------------------------------
 
-  if (isLoading) {
+  if (teamsLoading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
         <CircularProgress />
       </Box>
     );
@@ -264,41 +247,22 @@ const { myTeams, discoverTeams} = filterAllTeams();
 
   return (
     <Box>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 3,
-        }}
-      >
+      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography variant="h4">Teams</Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => setOpenCreate(true)}
-        >
+        <Button variant="contained" startIcon={<Add />} onClick={() => setOpenCreate(true)}>
           Create Team
         </Button>
       </Box>
 
-      {/*  NEW TAB STRUCTURE  */}
       <Paper sx={{ mb: 3 }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          aria-label="team listing tabs"
-        >
-          <Tab label={`My Teams (${myTeams.length})`} />
-          <Tab label={`Discover Teams (${discoverTeams.length})`} />
+        <Tabs value={tabValue} onChange={handleTabChange}>
+          <Tab label={`My Teams (${filteredMyTeams.length})`} />
+          <Tab label={`Discover (${filteredDiscoverTeams.length})`} />
         </Tabs>
-
-        {/* Search Bar Component */}
-        <Box sx={{ p: 2, pt: 2 }}>
+        <Box sx={{ p: 2 }}>
           <TextField
             fullWidth
-            variant="outlined"
-            placeholder="Search teams by name..."
+            placeholder="Search by name or description..."
             value={searchTerm}
             onChange={handleSearchChange}
             InputProps={{
@@ -312,58 +276,25 @@ const { myTeams, discoverTeams} = filterAllTeams();
         </Box>
       </Paper>
 
-      {/* Tab 0: My Teams */}
       <TabPanel value={tabValue} index={0}>
-        {renderTeamCards(myTeams)}
+        {renderTeamCards(filteredMyTeams)}
       </TabPanel>
-
-      {/* Tab 1: Discover Teams (Teams I am not in) */}
       <TabPanel value={tabValue} index={1}>
-        {renderTeamCards(discoverTeams)}
+        {renderTeamCards(filteredDiscoverTeams)}
       </TabPanel>
 
-      {/* Create Team Dialog */}
+      {/* Create Dialog */}
       <Dialog open={openCreate} onClose={() => setOpenCreate(false)}>
         <DialogTitle>Create New Team</DialogTitle>
-        {/* 💡 FIX 1: Wrap dialog content in <form> and connect handleSubmit */}
-        <form onSubmit={handleSubmit(handleCreate)}>
+        <form onSubmit={handleSubmit((data) => createMutation.mutate(data))}>
           <DialogContent>
-            <TextField
-              margin="dense"
-              label="Team Name"
-              fullWidth
-              {...register("name")}
-              error={!!errors.name}
-              helperText={errors.name?.message}
-            />
-            <TextField
-              margin="dense"
-              label="Description"
-              fullWidth
-              multiline
-              rows={3}
-              {...register("description")}
-            />
+            <TextField label="Team Name" fullWidth sx={{ mb: 2 }} {...register("name")} error={!!errors.name} helperText={errors.name?.message} />
+            <TextField label="Description" fullWidth multiline rows={3} {...register("description")} />
           </DialogContent>
           <DialogActions>
-            <Button
-              onClick={() => setOpenCreate(false)}
-              disabled={createMutation.isPending}
-            >
-              Cancel
-            </Button>
-            {/* 💡 FIX 2: Re-add the Submit button */}
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              disabled={createMutation.isPending}
-            >
-              {createMutation.isPending ? (
-                <CircularProgress size={24} />
-              ) : (
-                "Create"
-              )}
+            <Button onClick={() => setOpenCreate(false)}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={createMutation.isPending}>
+              {createMutation.isPending ? <CircularProgress size={24} /> : "Create"}
             </Button>
           </DialogActions>
         </form>
