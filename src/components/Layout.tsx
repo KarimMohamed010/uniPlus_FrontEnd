@@ -88,7 +88,7 @@ export default function Layout() {
 
   const navItems = [
     { text: "Home Feed", icon: <HomeIcon />, path: "/" },
-    { text: "Dashboard", icon: <DashboardIcon />, path: "/dashboard" },
+    // { text: "Dashboard", icon: <DashboardIcon />, path: "/dashboard" },
     { text: "Teams", icon: <GroupIcon />, path: "/teams" },
     { text: "Events", icon: <EventIcon />, path: "/events" },
     { text: "Chat", icon: <ChatIcon />, path: "/chat" },

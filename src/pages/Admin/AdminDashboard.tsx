@@ -143,18 +143,24 @@ export default function AdminDashboard() {
   const [approvalItemDetails, setApprovalItemDetails] = useState<any>(null);
 
   // Reports States
-  const [reportType, setReportType] = useState<"participation" | "engagement">("participation");
+  const [reportType, setReportType] = useState<"participation" | "engagement">(
+    "participation"
+  );
   const [reportScope, setReportScope] = useState<"event" | "team">("event");
-  const [timeRange, setTimeRange] = useState<"week" | "month" | "year" | "all">("month");
-  const [reportData, setReportData] = useState<Array<{
-    id: string | number;
-    name: string;
-    participants: number;
-    attendanceRate?: number;
-    engagementScore?: number;
-    totalInteractions?: number;
-    date: string;
-  }>>([]);
+  const [timeRange, setTimeRange] = useState<"week" | "month" | "year" | "all">(
+    "month"
+  );
+  const [reportData, setReportData] = useState<
+    Array<{
+      id: string | number;
+      name: string;
+      participants: number;
+      attendanceRate?: number;
+      engagementScore?: number;
+      totalInteractions?: number;
+      date: string;
+    }>
+  >([]);
   const [isReportGenerated, setIsReportGenerated] = useState(false);
 
   const [managerialReport, setManagerialReport] = useState<null | {
@@ -218,60 +224,60 @@ export default function AdminDashboard() {
   const [roomName, setRoomName] = useState("");
   const [roomCapacity, setRoomCapacity] = useState<number>(0);
   const [roomLocation, setRoomLocation] = useState("");
-    // add speaker state
-    // Add Speaker Dialog State
-const [addSpeakerDialogOpen, setAddSpeakerDialogOpen] = useState(false);
-const [speakerName, setSpeakerName] = useState("");
-const [speakerEmail, setSpeakerEmail] = useState("");
-const [speakerBio, setSpeakerBio] = useState("");
-const [speakerFname, setSpeakerFname] = useState("");
-const [speakerLname, setSpeakerLname] = useState("");
-const [speakerContact, setSpeakerContact] = useState<number | "">("");
-// handle add
-// Add Speaker Handler
-const handleAddSpeaker = async () => {
-  try {
-    if (!speakerName || !speakerEmail) {
-      setError("Speaker name and email are required");
-      return;
+  // add speaker state
+  // Add Speaker Dialog State
+  const [addSpeakerDialogOpen, setAddSpeakerDialogOpen] = useState(false);
+  const [speakerName, setSpeakerName] = useState("");
+  const [speakerEmail, setSpeakerEmail] = useState("");
+  const [speakerBio, setSpeakerBio] = useState("");
+  const [speakerFname, setSpeakerFname] = useState("");
+  const [speakerLname, setSpeakerLname] = useState("");
+  const [speakerContact, setSpeakerContact] = useState<number | "">("");
+  // handle add
+  // Add Speaker Handler
+  const handleAddSpeaker = async () => {
+    try {
+      if (!speakerName || !speakerEmail) {
+        setError("Speaker name and email are required");
+        return;
+      }
+
+      setIsLoading(true);
+      setError("");
+
+      await client.post("/admin/speakers", {
+        name: speakerName,
+        email: speakerEmail,
+        bio: speakerBio || undefined,
+        fname: speakerFname || undefined,
+        lname: speakerLname || undefined,
+        contact: speakerContact || undefined,
+      });
+
+      setSuccessMessage("Speaker added successfully!");
+      setAddSpeakerDialogOpen(false);
+
+      // Clear form fields
+      setSpeakerName("");
+      setSpeakerEmail("");
+      setSpeakerBio("");
+      setSpeakerFname("");
+      setSpeakerLname("");
+      setSpeakerContact("");
+
+      fetchSpeakers();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      console.error("Failed to add speaker:", err);
+      if (err instanceof AxiosError && err.response) {
+        setError(err.response.data.error || "Failed to add speaker");
+      } else {
+        setError("Failed to add speaker");
+      }
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(true);
-    setError("");
-    
-    await client.post("/admin/speakers", {
-      name: speakerName,
-      email: speakerEmail,
-      bio: speakerBio || undefined,
-      fname: speakerFname || undefined,
-      lname: speakerLname || undefined,
-      contact: speakerContact || undefined,
-    });
-    
-    setSuccessMessage("Speaker added successfully!");
-    setAddSpeakerDialogOpen(false);
-    
-    // Clear form fields
-    setSpeakerName("");
-    setSpeakerEmail("");
-    setSpeakerBio("");
-    setSpeakerFname("");
-    setSpeakerLname("");
-    setSpeakerContact("");
-    
-    fetchSpeakers();
-    setTimeout(() => setSuccessMessage(""), 3000);
-  } catch (err) {
-    console.error("Failed to add speaker:", err);
-    if (err instanceof AxiosError && err.response) {
-      setError(err.response.data.error || "Failed to add speaker");
-    } else {
-      setError("Failed to add speaker");
-    }
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
   // Fetch Admins
   const fetchAdmins = async () => {
     try {
@@ -346,7 +352,7 @@ const handleAddSpeaker = async () => {
   };
 
   // Remove Admin Handler
-  const handleRemove = async (id : number) => {
+  const handleRemove = async (id: number) => {
     try {
       setIsLoading(true);
       const response = await client.delete(`/admin/${id}`);
@@ -361,7 +367,7 @@ const handleAddSpeaker = async () => {
     }
   };
   // Handle Speaker deletion
-  const handleSpeakerRemove = async (id : number) => {
+  const handleSpeakerRemove = async (id: number) => {
     try {
       setIsLoading(true);
       const response = await client.delete(`admin/speakers/${id}`);
@@ -375,7 +381,7 @@ const handleAddSpeaker = async () => {
     }
   };
   // Handle room deletion
-  const handleRoomRemove = async (id : number) => {
+  const handleRoomRemove = async (id: number) => {
     try {
       setIsLoading(true);
       const response = await client.delete(`admin/rooms/${id}`);
@@ -452,7 +458,8 @@ const handleAddSpeaker = async () => {
       await fetchPendingApprovals();
     } catch (error: any) {
       console.error("Failed to remove item:", error);
-      const errorMessage = error.response?.data?.error || "Failed to remove item.";
+      const errorMessage =
+        error.response?.data?.error || "Failed to remove item.";
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -466,7 +473,9 @@ const handleAddSpeaker = async () => {
     try {
       setIsLoading(true);
       setError("");
-      const response = await client.get(`/admin/approvals/${item.type}/${item.id}`);
+      const response = await client.get(
+        `/admin/approvals/${item.type}/${item.id}`
+      );
       setApprovalItemDetails(response.data);
       setDetailsDialogOpen(true);
     } catch (error: any) {
@@ -484,16 +493,16 @@ const handleAddSpeaker = async () => {
     try {
       setIsLoading(true);
       setError("");
-      
+
       const response = await client.get(`/reports/${reportType}`, {
         params: {
           scope: reportScope,
-          timeRange: timeRange
-        }
+          timeRange: timeRange,
+        },
       });
-      
+
       const apiData = response.data.data || [];
-      
+
       const formattedData = apiData.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -501,16 +510,18 @@ const handleAddSpeaker = async () => {
         attendanceRate: item.attendanceRate,
         engagementScore: item.engagementScore,
         totalInteractions: item.totalInteractions,
-        date: item.date || new Date().toISOString().split('T')[0]
+        date: item.date || new Date().toISOString().split("T")[0],
       }));
-      
+
       setReportData(formattedData);
       setIsReportGenerated(true);
       setSuccessMessage("Report generated successfully!");
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error: any) {
       console.error("Failed to generate report:", error);
-      const errorMessage = error.response?.data?.error || "Failed to generate report. Please try again.";
+      const errorMessage =
+        error.response?.data?.error ||
+        "Failed to generate report. Please try again.";
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -521,44 +532,54 @@ const handleAddSpeaker = async () => {
     try {
       const headers = [];
       const dataRows: string[] = [];
-      
-      if (reportType === 'participation') {
-        headers.push('Name', 'Participants', 'Attendance Rate (%)', 'Date');
-        reportData.forEach(item => {
-          dataRows.push([
-            `"${item.name}"`,
-            item.participants,
-            item.attendanceRate,
-            new Date(item.date).toLocaleDateString()
-          ].join(','));
+
+      if (reportType === "participation") {
+        headers.push("Name", "Participants", "Attendance Rate (%)", "Date");
+        reportData.forEach((item) => {
+          dataRows.push(
+            [
+              `"${item.name}"`,
+              item.participants,
+              item.attendanceRate,
+              new Date(item.date).toLocaleDateString(),
+            ].join(",")
+          );
         });
       } else {
-        headers.push('Name', 'Engagement Score', 'Feedback Count', 'Participants', 'Date');
-        reportData.forEach(item => {
-          dataRows.push([
-            `"${item.name}"`,
-            item.engagementScore,
-            item.totalInteractions,
-            item.participants,
-            new Date(item.date).toLocaleDateString()
-          ].join(','));
+        headers.push(
+          "Name",
+          "Engagement Score",
+          "Feedback Count",
+          "Participants",
+          "Date"
+        );
+        reportData.forEach((item) => {
+          dataRows.push(
+            [
+              `"${item.name}"`,
+              item.engagementScore,
+              item.totalInteractions,
+              item.participants,
+              new Date(item.date).toLocaleDateString(),
+            ].join(",")
+          );
         });
       }
-      
-      const csvContent = [
-        headers.join(','),
-        ...dataRows
-      ].join('\n');
-      
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+
+      const csvContent = [headers.join(","), ...dataRows].join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `${reportType}_report_${new Date().toISOString().split('T')[0]}.csv`);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `${reportType}_report_${new Date().toISOString().split("T")[0]}.csv`
+      );
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       setSuccessMessage("Report downloaded successfully!");
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error) {
@@ -640,7 +661,9 @@ const handleAddSpeaker = async () => {
                           <TableCell>{item.type}</TableCell>
                           <TableCell>{item.submittedBy}</TableCell>
                           <TableCell>
-                            {item.date ? new Date(item.date).toLocaleString() : "-"}
+                            {item.date
+                              ? new Date(item.date).toLocaleString()
+                              : "-"}
                           </TableCell>
                           <TableCell>
                             <Button
@@ -688,7 +711,13 @@ const handleAddSpeaker = async () => {
                       : "Do you want to approve or reject this item?"}
                   </Typography>
                   {selectedApprovalItem && (
-                    <Box sx={{ p: 2, borderRadius: 2, backgroundColor: "rgba(0,0,0,0.04)" }}>
+                    <Box
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        backgroundColor: "rgba(0,0,0,0.04)",
+                      }}
+                    >
                       <Typography variant="subtitle1" fontWeight="bold">
                         {selectedApprovalItem.name}
                       </Typography>
@@ -743,7 +772,11 @@ const handleAddSpeaker = async () => {
                     <Box>
                       <Card sx={{ mb: 2 }}>
                         <CardContent>
-                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                          <Typography
+                            variant="h6"
+                            fontWeight="bold"
+                            sx={{ mb: 1 }}
+                          >
                             {approvalItemDetails.event.title}
                           </Typography>
                           <Grid container spacing={2}>
@@ -760,7 +793,8 @@ const handleAddSpeaker = async () => {
                                 Status
                               </Typography>
                               <Typography variant="body1">
-                                {approvalItemDetails.event.acceptanceStatus || "-"}
+                                {approvalItemDetails.event.acceptanceStatus ||
+                                  "-"}
                               </Typography>
                             </Grid>
                             <Grid key="ev_meta_3" size={{ xs: 12, sm: 6 }}>
@@ -769,7 +803,9 @@ const handleAddSpeaker = async () => {
                               </Typography>
                               <Typography variant="body1">
                                 {approvalItemDetails.event.startTime
-                                  ? new Date(approvalItemDetails.event.startTime).toLocaleString()
+                                  ? new Date(
+                                      approvalItemDetails.event.startTime
+                                    ).toLocaleString()
                                   : "-"}
                               </Typography>
                             </Grid>
@@ -779,7 +815,9 @@ const handleAddSpeaker = async () => {
                               </Typography>
                               <Typography variant="body1">
                                 {approvalItemDetails.event.endTime
-                                  ? new Date(approvalItemDetails.event.endTime).toLocaleString()
+                                  ? new Date(
+                                      approvalItemDetails.event.endTime
+                                    ).toLocaleString()
                                   : "-"}
                               </Typography>
                             </Grid>
@@ -810,9 +848,12 @@ const handleAddSpeaker = async () => {
                           <Grid key="ev_stat_1" size={{ xs: 12, sm: 6, md: 3 }}>
                             <Card>
                               <CardContent>
-                                <Typography color="textSecondary">Registrations</Typography>
+                                <Typography color="textSecondary">
+                                  Registrations
+                                </Typography>
                                 <Typography variant="h5">
-                                  {approvalItemDetails.stats.totalRegistrations ?? 0}
+                                  {approvalItemDetails.stats
+                                    .totalRegistrations ?? 0}
                                 </Typography>
                               </CardContent>
                             </Card>
@@ -820,7 +861,9 @@ const handleAddSpeaker = async () => {
                           <Grid key="ev_stat_2" size={{ xs: 12, sm: 6, md: 3 }}>
                             <Card>
                               <CardContent>
-                                <Typography color="textSecondary">Check-ins</Typography>
+                                <Typography color="textSecondary">
+                                  Check-ins
+                                </Typography>
                                 <Typography variant="h5">
                                   {approvalItemDetails.stats.totalCheckins ?? 0}
                                 </Typography>
@@ -830,7 +873,9 @@ const handleAddSpeaker = async () => {
                           <Grid key="ev_stat_3" size={{ xs: 12, sm: 6, md: 3 }}>
                             <Card>
                               <CardContent>
-                                <Typography color="textSecondary">Avg Rating</Typography>
+                                <Typography color="textSecondary">
+                                  Avg Rating
+                                </Typography>
                                 <Typography variant="h5">
                                   {approvalItemDetails.stats.avgRating ?? 0}
                                 </Typography>
@@ -840,7 +885,9 @@ const handleAddSpeaker = async () => {
                           <Grid key="ev_stat_4" size={{ xs: 12, sm: 6, md: 3 }}>
                             <Card>
                               <CardContent>
-                                <Typography color="textSecondary">Feedback</Typography>
+                                <Typography color="textSecondary">
+                                  Feedback
+                                </Typography>
                                 <Typography variant="h5">
                                   {approvalItemDetails.stats.feedbackCount ?? 0}
                                 </Typography>
@@ -853,27 +900,46 @@ const handleAddSpeaker = async () => {
                       {approvalItemDetails.room && (
                         <Card sx={{ mb: 2 }}>
                           <CardContent>
-                            <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            <Typography
+                              variant="h6"
+                              fontWeight="bold"
+                              sx={{ mb: 1 }}
+                            >
                               Room
                             </Typography>
                             <Grid container spacing={2}>
                               <Grid key="room_1" size={{ xs: 12, sm: 6 }}>
-                                <Typography variant="body2" color="textSecondary">
+                                <Typography
+                                  variant="body2"
+                                  color="textSecondary"
+                                >
                                   Name
                                 </Typography>
-                                <Typography>{approvalItemDetails.room.name}</Typography>
+                                <Typography>
+                                  {approvalItemDetails.room.name}
+                                </Typography>
                               </Grid>
                               <Grid key="room_2" size={{ xs: 12, sm: 3 }}>
-                                <Typography variant="body2" color="textSecondary">
+                                <Typography
+                                  variant="body2"
+                                  color="textSecondary"
+                                >
                                   Capacity
                                 </Typography>
-                                <Typography>{approvalItemDetails.room.capacity}</Typography>
+                                <Typography>
+                                  {approvalItemDetails.room.capacity}
+                                </Typography>
                               </Grid>
                               <Grid key="room_3" size={{ xs: 12, sm: 3 }}>
-                                <Typography variant="body2" color="textSecondary">
+                                <Typography
+                                  variant="body2"
+                                  color="textSecondary"
+                                >
                                   Location
                                 </Typography>
-                                <Typography>{approvalItemDetails.room.location}</Typography>
+                                <Typography>
+                                  {approvalItemDetails.room.location}
+                                </Typography>
                               </Grid>
                             </Grid>
                           </CardContent>
@@ -883,7 +949,11 @@ const handleAddSpeaker = async () => {
                       {Array.isArray(approvalItemDetails.speakers) && (
                         <Card sx={{ mb: 2 }}>
                           <CardContent>
-                            <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            <Typography
+                              variant="h6"
+                              fontWeight="bold"
+                              sx={{ mb: 1 }}
+                            >
                               Speakers
                             </Typography>
                             <TableContainer component={Paper}>
@@ -899,17 +969,30 @@ const handleAddSpeaker = async () => {
                                   {approvalItemDetails.speakers.length === 0 ? (
                                     <TableRow>
                                       <TableCell colSpan={3} align="center">
-                                        <Typography color="textSecondary">No speakers</Typography>
+                                        <Typography color="textSecondary">
+                                          No speakers
+                                        </Typography>
                                       </TableCell>
                                     </TableRow>
                                   ) : (
-                                    approvalItemDetails.speakers.map((s: any) => (
-                                      <TableRow key={s.id}>
-                                        <TableCell>{s.name || `${s.fname || ""} ${s.lname || ""}`}</TableCell>
-                                        <TableCell>{s.email || "-"}</TableCell>
-                                        <TableCell>{s.contact || "-"}</TableCell>
-                                      </TableRow>
-                                    ))
+                                    approvalItemDetails.speakers.map(
+                                      (s: any) => (
+                                        <TableRow key={s.id}>
+                                          <TableCell>
+                                            {s.name ||
+                                              `${s.fname || ""} ${
+                                                s.lname || ""
+                                              }`}
+                                          </TableCell>
+                                          <TableCell>
+                                            {s.email || "-"}
+                                          </TableCell>
+                                          <TableCell>
+                                            {s.contact || "-"}
+                                          </TableCell>
+                                        </TableRow>
+                                      )
+                                    )
                                   )}
                                 </TableBody>
                               </Table>
@@ -921,7 +1004,11 @@ const handleAddSpeaker = async () => {
                       {Array.isArray(approvalItemDetails.registrations) && (
                         <Card>
                           <CardContent>
-                            <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                            <Typography
+                              variant="h6"
+                              fontWeight="bold"
+                              sx={{ mb: 1 }}
+                            >
                               Registrations
                             </Typography>
                             <TableContainer component={Paper}>
@@ -937,25 +1024,46 @@ const handleAddSpeaker = async () => {
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                  {approvalItemDetails.registrations.length === 0 ? (
+                                  {approvalItemDetails.registrations.length ===
+                                  0 ? (
                                     <TableRow>
                                       <TableCell colSpan={6} align="center">
-                                        <Typography color="textSecondary">No registrations</Typography>
+                                        <Typography color="textSecondary">
+                                          No registrations
+                                        </Typography>
                                       </TableCell>
                                     </TableRow>
                                   ) : (
-                                    approvalItemDetails.registrations.map((r: any) => (
-                                      <TableRow key={`${r.studentId}-${r.dateIssued}`}>
-                                        <TableCell>{r.studentName || r.studentId}</TableCell>
-                                        <TableCell>{r.email || "-"}</TableCell>
-                                        <TableCell>{r.price ?? "-"}</TableCell>
-                                        <TableCell>{r.scanned ? "Yes" : "No"}</TableCell>
-                                        <TableCell>{r.rating ?? "-"}</TableCell>
-                                        <TableCell>
-                                          {r.dateIssued ? new Date(r.dateIssued).toLocaleString() : "-"}
-                                        </TableCell>
-                                      </TableRow>
-                                    ))
+                                    approvalItemDetails.registrations.map(
+                                      (r: any) => (
+                                        <TableRow
+                                          key={`${r.studentId}-${r.dateIssued}`}
+                                        >
+                                          <TableCell>
+                                            {r.studentName || r.studentId}
+                                          </TableCell>
+                                          <TableCell>
+                                            {r.email || "-"}
+                                          </TableCell>
+                                          <TableCell>
+                                            {r.price ?? "-"}
+                                          </TableCell>
+                                          <TableCell>
+                                            {r.scanned ? "Yes" : "No"}
+                                          </TableCell>
+                                          <TableCell>
+                                            {r.rating ?? "-"}
+                                          </TableCell>
+                                          <TableCell>
+                                            {r.dateIssued
+                                              ? new Date(
+                                                  r.dateIssued
+                                                ).toLocaleString()
+                                              : "-"}
+                                          </TableCell>
+                                        </TableRow>
+                                      )
+                                    )
                                   )}
                                 </TableBody>
                               </Table>
@@ -968,11 +1076,20 @@ const handleAddSpeaker = async () => {
                     <Box>
                       <Card sx={{ mb: 2 }}>
                         <CardContent>
-                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                          <Typography
+                            variant="h6"
+                            fontWeight="bold"
+                            sx={{ mb: 1 }}
+                          >
                             {approvalItemDetails.team.name}
                           </Typography>
-                          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                            {approvalItemDetails.team.description || "No description"}
+                          <Typography
+                            variant="body2"
+                            color="textSecondary"
+                            sx={{ mb: 2 }}
+                          >
+                            {approvalItemDetails.team.description ||
+                              "No description"}
                           </Typography>
                           <Grid container spacing={2}>
                             <Grid key="team_meta_1" size={{ xs: 12, sm: 6 }}>
@@ -980,7 +1097,8 @@ const handleAddSpeaker = async () => {
                                 Status
                               </Typography>
                               <Typography variant="body1">
-                                {approvalItemDetails.team.acceptanceStatus || "-"}
+                                {approvalItemDetails.team.acceptanceStatus ||
+                                  "-"}
                               </Typography>
                             </Grid>
                             <Grid key="team_meta_2" size={{ xs: 12, sm: 6 }}>
@@ -1015,7 +1133,11 @@ const handleAddSpeaker = async () => {
 
                       <Card sx={{ mb: 2 }}>
                         <CardContent>
-                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                          <Typography
+                            variant="h6"
+                            fontWeight="bold"
+                            sx={{ mb: 1 }}
+                          >
                             Members
                           </Typography>
                           <TableContainer component={Paper}>
@@ -1032,13 +1154,17 @@ const handleAddSpeaker = async () => {
                                 approvalItemDetails.members.length === 0 ? (
                                   <TableRow>
                                     <TableCell colSpan={3} align="center">
-                                      <Typography color="textSecondary">No members</Typography>
+                                      <Typography color="textSecondary">
+                                        No members
+                                      </Typography>
                                     </TableCell>
                                   </TableRow>
                                 ) : (
                                   approvalItemDetails.members.map((m: any) => (
                                     <TableRow key={`${m.studentId}-${m.role}`}>
-                                      <TableCell>{`${m.fname || ""} ${m.lname || ""}`}</TableCell>
+                                      <TableCell>{`${m.fname || ""} ${
+                                        m.lname || ""
+                                      }`}</TableCell>
                                       <TableCell>{m.email || "-"}</TableCell>
                                       <TableCell>{m.role || "-"}</TableCell>
                                     </TableRow>
@@ -1052,7 +1178,11 @@ const handleAddSpeaker = async () => {
 
                       <Card>
                         <CardContent>
-                          <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
+                          <Typography
+                            variant="h6"
+                            fontWeight="bold"
+                            sx={{ mb: 1 }}
+                          >
                             Team Events
                           </Typography>
                           <TableContainer component={Paper}>
@@ -1069,7 +1199,9 @@ const handleAddSpeaker = async () => {
                                 approvalItemDetails.events.length === 0 ? (
                                   <TableRow>
                                     <TableCell colSpan={3} align="center">
-                                      <Typography color="textSecondary">No events</Typography>
+                                      <Typography color="textSecondary">
+                                        No events
+                                      </Typography>
                                     </TableCell>
                                   </TableRow>
                                 ) : (
@@ -1077,9 +1209,15 @@ const handleAddSpeaker = async () => {
                                     <TableRow key={e.id}>
                                       <TableCell>{e.title || "-"}</TableCell>
                                       <TableCell>
-                                        {e.startTime ? new Date(e.startTime).toLocaleString() : "-"}
+                                        {e.startTime
+                                          ? new Date(
+                                              e.startTime
+                                            ).toLocaleString()
+                                          : "-"}
                                       </TableCell>
-                                      <TableCell>{e.acceptanceStatus || "-"}</TableCell>
+                                      <TableCell>
+                                        {e.acceptanceStatus || "-"}
+                                      </TableCell>
                                     </TableRow>
                                   ))
                                 )}
@@ -1090,7 +1228,9 @@ const handleAddSpeaker = async () => {
                       </Card>
                     </Box>
                   ) : (
-                    <Typography color="textSecondary">Unknown details format</Typography>
+                    <Typography color="textSecondary">
+                      Unknown details format
+                    </Typography>
                   )}
                 </DialogContent>
                 <DialogActions>
@@ -1285,13 +1425,15 @@ const handleAddSpeaker = async () => {
                           <TableCell>{admin.username}</TableCell>
                           <TableCell>{admin.email}</TableCell>
                           <TableCell>
-                            { admin.id != user.id&&<Button
-                              size="small"
-                              color="error"
-                              onClick={() => handleRemove(admin.id)}
-                            >
-                              Remove
-                            </Button>}
+                            {admin.id != user.id && (
+                              <Button
+                                size="small"
+                                color="error"
+                                onClick={() => handleRemove(admin.id)}
+                              >
+                                Remove
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))
@@ -1317,7 +1459,9 @@ const handleAddSpeaker = async () => {
                     label="Report Type"
                     value={reportType}
                     onChange={(e) => {
-                      setReportType(e.target.value as "participation" | "engagement");
+                      setReportType(
+                        e.target.value as "participation" | "engagement"
+                      );
                       setIsReportGenerated(false);
                     }}
                     SelectProps={{
@@ -1355,7 +1499,9 @@ const handleAddSpeaker = async () => {
                     label="Time Range"
                     value={timeRange}
                     onChange={(e) => {
-                      setTimeRange(e.target.value as "week" | "month" | "year" | "all");
+                      setTimeRange(
+                        e.target.value as "week" | "month" | "year" | "all"
+                      );
                       setIsReportGenerated(false);
                     }}
                     SelectProps={{
@@ -1369,7 +1515,14 @@ const handleAddSpeaker = async () => {
                   </TextField>
                 </Grid>
 
-                <Grid key="generateBtn" item xs={12} sm={6} md={3} sx={{ display: 'flex', alignItems: 'flex-end' }}>
+                <Grid
+                  key="generateBtn"
+                  item
+                  xs={12}
+                  sm={6}
+                  md={3}
+                  sx={{ display: "flex", alignItems: "flex-end" }}
+                >
                   <Button
                     fullWidth
                     variant="contained"
@@ -1377,9 +1530,11 @@ const handleAddSpeaker = async () => {
                     onClick={handleGenerateReport}
                     disabled={isLoading}
                     startIcon={
-                      isLoading ? <CircularProgress size={20} color="inherit" /> : null
+                      isLoading ? (
+                        <CircularProgress size={20} color="inherit" />
+                      ) : null
                     }
-                    sx={{ height: '56px' }}
+                    sx={{ height: "56px" }}
                   >
                     {isLoading ? "Generating..." : "Generate Report"}
                   </Button>
@@ -1388,11 +1543,23 @@ const handleAddSpeaker = async () => {
 
               {isReportGenerated && (
                 <Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      mb: 2,
+                    }}
+                  >
                     <Typography variant="subtitle1">
-                      Showing {reportScope === 'event' ? 'Events' : 'Teams'} for {timeRange === 'week' ? 'Last 7 Days' :
-                        timeRange === 'month' ? 'This Month' :
-                          timeRange === 'year' ? 'This Year' : 'All Time'}
+                      Showing {reportScope === "event" ? "Events" : "Teams"} for{" "}
+                      {timeRange === "week"
+                        ? "Last 7 Days"
+                        : timeRange === "month"
+                        ? "This Month"
+                        : timeRange === "year"
+                        ? "This Year"
+                        : "All Time"}
                     </Typography>
                     <Button
                       variant="outlined"
@@ -1407,15 +1574,21 @@ const handleAddSpeaker = async () => {
                   <TableContainer component={Paper}>
                     <Table>
                       <TableHead>
-                        <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                          <TableCell>{reportScope === 'event' ? 'Event' : 'Team'} Name</TableCell>
+                        <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                          <TableCell>
+                            {reportScope === "event" ? "Event" : "Team"} Name
+                          </TableCell>
                           <TableCell align="right">Participants</TableCell>
-                          {reportType === 'participation' ? (
+                          {reportType === "participation" ? (
                             <TableCell align="right">Attendance Rate</TableCell>
                           ) : (
                             <>
-                              <TableCell align="right">Engagement Score</TableCell>
-                              <TableCell align="right">Feedback Count</TableCell>
+                              <TableCell align="right">
+                                Engagement Score
+                              </TableCell>
+                              <TableCell align="right">
+                                Feedback Count
+                              </TableCell>
                             </>
                           )}
                           <TableCell align="right">Date</TableCell>
@@ -1426,26 +1599,45 @@ const handleAddSpeaker = async () => {
                           reportData.map((item) => (
                             <TableRow key={item.id} hover>
                               <TableCell>{item.name}</TableCell>
-                              <TableCell align="right">{item.participants}</TableCell>
-                              {reportType === 'participation' ? (
+                              <TableCell align="right">
+                                {item.participants}
+                              </TableCell>
+                              {reportType === "participation" ? (
                                 <TableCell align="right">
-                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                    <Box sx={{ width: '100%', maxWidth: '100px', mr: 1 }}>
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "flex-end",
+                                    }}
+                                  >
+                                    <Box
+                                      sx={{
+                                        width: "100%",
+                                        maxWidth: "100px",
+                                        mr: 1,
+                                      }}
+                                    >
                                       <Box
                                         sx={{
-                                          height: '8px',
-                                          backgroundColor: '#e0e0e0',
-                                          borderRadius: '4px',
-                                          overflow: 'hidden'
+                                          height: "8px",
+                                          backgroundColor: "#e0e0e0",
+                                          borderRadius: "4px",
+                                          overflow: "hidden",
                                         }}
                                       >
                                         <Box
                                           sx={{
-                                            height: '100%',
+                                            height: "100%",
                                             width: `${item.attendanceRate}%`,
-                                            backgroundColor: (item.attendanceRate ?? 0) >= 80 ? '#4caf50' :
-                                              (item.attendanceRate ?? 0) >= 60 ? '#ff9800' : '#f44336',
-                                            transition: 'width 0.3s ease'
+                                            backgroundColor:
+                                              (item.attendanceRate ?? 0) >= 80
+                                                ? "#4caf50"
+                                                : (item.attendanceRate ?? 0) >=
+                                                  60
+                                                ? "#ff9800"
+                                                : "#f44336",
+                                            transition: "width 0.3s ease",
                                           }}
                                         />
                                       </Box>
@@ -1456,30 +1648,47 @@ const handleAddSpeaker = async () => {
                               ) : (
                                 <>
                                   <TableCell align="right">
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                      <Box sx={{ mr: 1 }}>{item.engagementScore?.toFixed(1)}</Box>
+                                    <Box
+                                      sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "flex-end",
+                                      }}
+                                    >
+                                      <Box sx={{ mr: 1 }}>
+                                        {item.engagementScore?.toFixed(1)}
+                                      </Box>
                                       <Box
                                         sx={{
-                                          width: '60px',
-                                          height: '8px',
-                                          backgroundColor: '#e0e0e0',
-                                          borderRadius: '4px',
-                                          overflow: 'hidden'
+                                          width: "60px",
+                                          height: "8px",
+                                          backgroundColor: "#e0e0e0",
+                                          borderRadius: "4px",
+                                          overflow: "hidden",
                                         }}
                                       >
                                         <Box
                                           sx={{
-                                            height: '100%',
-                                            width: `${(item.engagementScore || 0) * 20}%`,
-                                            backgroundColor: (item.engagementScore || 0) >= 4 ? '#4caf50' :
-                                              (item.engagementScore || 0) >= 3 ? '#ff9800' : '#f44336',
-                                            transition: 'width 0.3s ease'
+                                            height: "100%",
+                                            width: `${
+                                              (item.engagementScore || 0) * 20
+                                            }%`,
+                                            backgroundColor:
+                                              (item.engagementScore || 0) >= 4
+                                                ? "#4caf50"
+                                                : (item.engagementScore || 0) >=
+                                                  3
+                                                ? "#ff9800"
+                                                : "#f44336",
+                                            transition: "width 0.3s ease",
                                           }}
                                         />
                                       </Box>
                                     </Box>
                                   </TableCell>
-                                  <TableCell align="right">{item.totalInteractions}</TableCell>
+                                  <TableCell align="right">
+                                    {item.totalInteractions}
+                                  </TableCell>
                                 </>
                               )}
                               <TableCell align="right">
@@ -1489,7 +1698,11 @@ const handleAddSpeaker = async () => {
                           ))
                         ) : (
                           <TableRow>
-                            <TableCell colSpan={reportType === 'participation' ? 4 : 5} align="center" sx={{ py: 4 }}>
+                            <TableCell
+                              colSpan={reportType === "participation" ? 4 : 5}
+                              align="center"
+                              sx={{ py: 4 }}
+                            >
                               <Typography color="textSecondary">
                                 No data available for the selected filters
                               </Typography>
@@ -1501,9 +1714,10 @@ const handleAddSpeaker = async () => {
                   </TableContainer>
 
                   {reportData.length > 0 && (
-                    <Box sx={{ mt: 3, textAlign: 'center' }}>
+                    <Box sx={{ mt: 3, textAlign: "center" }}>
                       <Typography variant="body2" color="textSecondary">
-                        Showing {reportData.length} {reportScope === 'event' ? 'events' : 'teams'} •
+                        Showing {reportData.length}{" "}
+                        {reportScope === "event" ? "events" : "teams"} •
                         Generated on {new Date().toLocaleString()}
                       </Typography>
                     </Box>
@@ -1526,7 +1740,9 @@ const handleAddSpeaker = async () => {
                 </Alert>
               )}
 
-              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+              <Box
+                sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}
+              >
                 <Typography color="textSecondary">
                   Overall statistics for the whole application
                 </Typography>
@@ -1534,9 +1750,17 @@ const handleAddSpeaker = async () => {
                   variant="contained"
                   onClick={handleGenerateManagerialReport}
                   disabled={isLoading}
-                  startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : undefined}
+                  startIcon={
+                    isLoading ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : undefined
+                  }
                 >
-                  {isLoading ? "Generating..." : managerialReport ? "Refresh" : "Generate"}
+                  {isLoading
+                    ? "Generating..."
+                    : managerialReport
+                    ? "Refresh"
+                    : "Generate"}
                 </Button>
               </Box>
 
@@ -1545,32 +1769,48 @@ const handleAddSpeaker = async () => {
                   <Grid key="mgr_totalUsers" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Users</Typography>
-                        <Typography variant="h5">{managerialReport.totalUsers}</Typography>
+                        <Typography color="textSecondary">
+                          Total Users
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalUsers}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid key="mgr_totalStudents" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Students</Typography>
-                        <Typography variant="h5">{managerialReport.totalStudents}</Typography>
+                        <Typography color="textSecondary">
+                          Total Students
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalStudents}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid key="mgr_totalAdmins" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Admins</Typography>
-                        <Typography variant="h5">{managerialReport.totalAdmins}</Typography>
+                        <Typography color="textSecondary">
+                          Total Admins
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalAdmins}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid key="mgr_totalTeams" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Teams</Typography>
-                        <Typography variant="h5">{managerialReport.totalTeams}</Typography>
+                        <Typography color="textSecondary">
+                          Total Teams
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalTeams}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
@@ -1578,98 +1818,164 @@ const handleAddSpeaker = async () => {
                   <Grid key="mgr_totalEvents" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Events</Typography>
-                        <Typography variant="h5">{managerialReport.totalEvents}</Typography>
+                        <Typography color="textSecondary">
+                          Total Events
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalEvents}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid key="mgr_approvedEvents" size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Grid
+                    key="mgr_approvedEvents"
+                    size={{ xs: 12, sm: 6, md: 3 }}
+                  >
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Approved Events</Typography>
-                        <Typography variant="h5">{managerialReport.approvedEvents}</Typography>
+                        <Typography color="textSecondary">
+                          Approved Events
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.approvedEvents}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid key="mgr_pendingEvents" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Pending Events</Typography>
-                        <Typography variant="h5">{managerialReport.pendingEvents}</Typography>
+                        <Typography color="textSecondary">
+                          Pending Events
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.pendingEvents}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid key="mgr_rejectedEvents" size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Grid
+                    key="mgr_rejectedEvents"
+                    size={{ xs: 12, sm: 6, md: 3 }}
+                  >
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Rejected Events</Typography>
-                        <Typography variant="h5">{managerialReport.rejectedEvents}</Typography>
+                        <Typography color="textSecondary">
+                          Rejected Events
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.rejectedEvents}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
 
-                  <Grid key="mgr_totalRegistrations" size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Grid
+                    key="mgr_totalRegistrations"
+                    size={{ xs: 12, sm: 6, md: 3 }}
+                  >
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Registrations</Typography>
-                        <Typography variant="h5">{managerialReport.totalRegistrations}</Typography>
+                        <Typography color="textSecondary">
+                          Total Registrations
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalRegistrations}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid key="mgr_totalCheckins" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Check-ins</Typography>
-                        <Typography variant="h5">{managerialReport.totalCheckins}</Typography>
+                        <Typography color="textSecondary">
+                          Total Check-ins
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalCheckins}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid key="mgr_checkinRate" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Check-in Rate</Typography>
-                        <Typography variant="h5">{managerialReport.checkinRate}%</Typography>
+                        <Typography color="textSecondary">
+                          Check-in Rate
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.checkinRate}%
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid key="mgr_avgRating" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Avg Rating</Typography>
-                        <Typography variant="h5">{managerialReport.avgRating}</Typography>
+                        <Typography color="textSecondary">
+                          Avg Rating
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.avgRating}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
 
-                  <Grid key="mgr_avgTicketPrice" size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Grid
+                    key="mgr_avgTicketPrice"
+                    size={{ xs: 12, sm: 6, md: 3 }}
+                  >
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Avg Ticket Price</Typography>
-                        <Typography variant="h5">{managerialReport.avgTicketPrice}</Typography>
+                        <Typography color="textSecondary">
+                          Avg Ticket Price
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.avgTicketPrice}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid key="mgr_minTicketPrice" size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Grid
+                    key="mgr_minTicketPrice"
+                    size={{ xs: 12, sm: 6, md: 3 }}
+                  >
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Min Ticket Price</Typography>
-                        <Typography variant="h5">{managerialReport.minTicketPrice}</Typography>
+                        <Typography color="textSecondary">
+                          Min Ticket Price
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.minTicketPrice}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid key="mgr_maxTicketPrice" size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Grid
+                    key="mgr_maxTicketPrice"
+                    size={{ xs: 12, sm: 6, md: 3 }}
+                  >
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Max Ticket Price</Typography>
-                        <Typography variant="h5">{managerialReport.maxTicketPrice}</Typography>
+                        <Typography color="textSecondary">
+                          Max Ticket Price
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.maxTicketPrice}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid key="mgr_feedbackCount" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Feedback Count</Typography>
-                        <Typography variant="h5">{managerialReport.feedbackCount}</Typography>
+                        <Typography color="textSecondary">
+                          Feedback Count
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.feedbackCount}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
@@ -1677,32 +1983,51 @@ const handleAddSpeaker = async () => {
                   <Grid key="mgr_totalPosts" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Posts</Typography>
-                        <Typography variant="h5">{managerialReport.totalPosts}</Typography>
+                        <Typography color="textSecondary">
+                          Total Posts
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalPosts}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid key="mgr_totalComments" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Comments</Typography>
-                        <Typography variant="h5">{managerialReport.totalComments}</Typography>
+                        <Typography color="textSecondary">
+                          Total Comments
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalComments}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid key="mgr_totalMessages" size={{ xs: 12, sm: 6, md: 3 }}>
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Messages</Typography>
-                        <Typography variant="h5">{managerialReport.totalMessages}</Typography>
+                        <Typography color="textSecondary">
+                          Total Messages
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalMessages}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid key="mgr_totalApplications" size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Grid
+                    key="mgr_totalApplications"
+                    size={{ xs: 12, sm: 6, md: 3 }}
+                  >
                     <Card>
                       <CardContent>
-                        <Typography color="textSecondary">Total Applications</Typography>
-                        <Typography variant="h5">{managerialReport.totalApplications}</Typography>
+                        <Typography color="textSecondary">
+                          Total Applications
+                        </Typography>
+                        <Typography variant="h5">
+                          {managerialReport.totalApplications}
+                        </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
@@ -1712,7 +2037,7 @@ const handleAddSpeaker = async () => {
           </TabPanel>
 
           {/* TAB 4: Rooms */}
-                    {/* TAB 4: Rooms */}
+          {/* TAB 4: Rooms */}
           <TabPanel value={tabValue} index={4}>
             <Box>
               <Box
@@ -1810,7 +2135,14 @@ const handleAddSpeaker = async () => {
               >
                 <DialogTitle>Add New Room</DialogTitle>
                 <DialogContent>
-                  <Box sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <Box
+                    sx={{
+                      mt: 2,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
                     <TextField
                       fullWidth
                       label="Room Name"
@@ -1823,7 +2155,15 @@ const handleAddSpeaker = async () => {
                       label="Capacity"
                       type="number"
                       value={roomCapacity}
-                      onChange={(e) => setRoomCapacity(parseInt(e.target.value) || 0)}
+                      slotProps={{
+                        htmlInput: {
+                          min: 0,
+                          step: 1,
+                        },
+                      }}
+                      onChange={(e) =>
+                        setRoomCapacity(parseInt(e.target.value) || 0)
+                      }
                       required
                     />
                     <TextField
@@ -1856,145 +2196,157 @@ const handleAddSpeaker = async () => {
                 </DialogActions>
               </Dialog>
             </Box>
-            
-        <Typography variant="h6" sx={{mt:3, mb:3}}>Speakers</Typography>
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => setAddSpeakerDialogOpen(true)}
-          >
-            Add Speaker
-          </Button>
-        </Box>
-        <TableContainer component={Paper}>
-                <Table>
-                  <TableHead>
-                    <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                      
-                      <TableCell>Name</TableCell>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Bio</TableCell>
-                      <TableCell></TableCell>
+
+            <Typography variant="h6" sx={{ mt: 3, mb: 3 }}>
+              Speakers
+            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => setAddSpeakerDialogOpen(true)}
+              >
+                Add Speaker
+              </Button>
+            </Box>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Email</TableCell>
+                    <TableCell>Bio</TableCell>
+                    <TableCell></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {speakerssList.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                        {" "}
+                        {/* Changed from 4 to 8 */}
+                        <Typography color="textSecondary">
+                          No speakers available
+                        </Typography>
+                      </TableCell>
                     </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {speakerssList.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} align="center" sx={{ py: 4 }}> {/* Changed from 4 to 8 */}
-                          <Typography color="textSecondary">
-                            No speakers available
-                          </Typography>
+                  ) : (
+                    speakerssList.map((speaker) => (
+                      <TableRow key={speaker.id}>
+                        <TableCell>{speaker.name}</TableCell>
+                        <TableCell>{speaker.email}</TableCell>
+                        <TableCell>{speaker.bio || "-"}</TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            color="error"
+                            onClick={() => handleSpeakerRemove(speaker.id)}
+                          >
+                            Remove
+                          </Button>
                         </TableCell>
                       </TableRow>
-                    ) : (
-                      speakerssList.map((speaker) => (
-                        <TableRow key={speaker.id}>
-                          
-                          
-                          <TableCell>{speaker.name}</TableCell>
-                          <TableCell>{speaker.email}</TableCell>
-                          <TableCell>{speaker.bio || "-"}</TableCell>
-                          <TableCell>
-                            <Button
-                              size="small"
-                              color="error"
-                              onClick={() => handleSpeakerRemove(speaker.id)}
-                            >
-                              Remove
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
+                    ))
+                  )}
                 </TableBody>
-                </Table>
-              </TableContainer>
-              <Dialog
-  open={addSpeakerDialogOpen}
-  onClose={() => {
-    setAddSpeakerDialogOpen(false);
-    setSpeakerName("");
-    setSpeakerEmail("");
-    setSpeakerBio("");
-    setSpeakerFname("");
-    setSpeakerLname("");
-    setSpeakerContact("");
-  }}
-  maxWidth="sm"
-  fullWidth
->
-  <DialogTitle>Add New Speaker</DialogTitle>
-  <DialogContent>
-    <Box sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-      <TextField
-        fullWidth
-        label="Speaker Name"
-        value={speakerName}
-        onChange={(e) => setSpeakerName(e.target.value)}
-        required
-      />
-      <TextField
-        fullWidth
-        label="Email"
-        type="email"
-        value={speakerEmail}
-        onChange={(e) => setSpeakerEmail(e.target.value)}
-        required
-      />
-      <TextField
-        fullWidth
-        label="First Name (Optional)"
-        value={speakerFname}
-        onChange={(e) => setSpeakerFname(e.target.value)}
-      />
-      <TextField
-        fullWidth
-        label="Last Name (Optional)"
-        value={speakerLname}
-        onChange={(e) => setSpeakerLname(e.target.value)}
-      />
-      <TextField
-        fullWidth
-        label="Bio (Optional)"
-        multiline
-        rows={3}
-        value={speakerBio}
-        onChange={(e) => setSpeakerBio(e.target.value)}
-      />
-      <TextField
-        fullWidth
-        label="Contact Number (Optional)"
-        type="number"
-        value={speakerContact}
-        onChange={(e) => setSpeakerContact(e.target.value ? parseInt(e.target.value) : "")}
-      />
-    </Box>
-  </DialogContent>
-  <DialogActions>
-    <Button
-      onClick={() => {
-        setAddSpeakerDialogOpen(false);
-        setSpeakerName("");
-        setSpeakerEmail("");
-        setSpeakerBio("");
-        setSpeakerFname("");
-        setSpeakerLname("");
-        setSpeakerContact("");
-      }}
-      disabled={isLoading}
-    >
-      Cancel
-    </Button>
-    <Button
-      variant="contained"
-      onClick={handleAddSpeaker}
-      disabled={isLoading}
-    >
-      {isLoading ? <CircularProgress size={20} /> : "Add Speaker"}
-    </Button>
-  </DialogActions>
-</Dialog>
+              </Table>
+            </TableContainer>
+            <Dialog
+              open={addSpeakerDialogOpen}
+              onClose={() => {
+                setAddSpeakerDialogOpen(false);
+                setSpeakerName("");
+                setSpeakerEmail("");
+                setSpeakerBio("");
+                setSpeakerFname("");
+                setSpeakerLname("");
+                setSpeakerContact("");
+              }}
+              maxWidth="sm"
+              fullWidth
+            >
+              <DialogTitle>Add New Speaker</DialogTitle>
+              <DialogContent>
+                <Box
+                  sx={{
+                    mt: 2,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                  }}
+                >
+                  <TextField
+                    fullWidth
+                    label="Speaker Name"
+                    value={speakerName}
+                    onChange={(e) => setSpeakerName(e.target.value)}
+                    required
+                  />
+                  <TextField
+                    fullWidth
+                    label="Email"
+                    type="email"
+                    value={speakerEmail}
+                    onChange={(e) => setSpeakerEmail(e.target.value)}
+                    required
+                  />
+                  <TextField
+                    fullWidth
+                    label="First Name (Optional)"
+                    value={speakerFname}
+                    onChange={(e) => setSpeakerFname(e.target.value)}
+                  />
+                  <TextField
+                    fullWidth
+                    label="Last Name (Optional)"
+                    value={speakerLname}
+                    onChange={(e) => setSpeakerLname(e.target.value)}
+                  />
+                  <TextField
+                    fullWidth
+                    label="Bio (Optional)"
+                    multiline
+                    rows={3}
+                    value={speakerBio}
+                    onChange={(e) => setSpeakerBio(e.target.value)}
+                  />
+                  <TextField
+                    fullWidth
+                    label="Contact Number (Optional)"
+                    type="number"
+                    value={speakerContact}
+                    onChange={(e) =>
+                      setSpeakerContact(
+                        e.target.value ? parseInt(e.target.value) : ""
+                      )
+                    }
+                  />
+                </Box>
+              </DialogContent>
+              <DialogActions>
+                <Button
+                  onClick={() => {
+                    setAddSpeakerDialogOpen(false);
+                    setSpeakerName("");
+                    setSpeakerEmail("");
+                    setSpeakerBio("");
+                    setSpeakerFname("");
+                    setSpeakerLname("");
+                    setSpeakerContact("");
+                  }}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handleAddSpeaker}
+                  disabled={isLoading}
+                >
+                  {isLoading ? <CircularProgress size={20} /> : "Add Speaker"}
+                </Button>
+              </DialogActions>
+            </Dialog>
           </TabPanel>
         </CardContent>
       </Card>
