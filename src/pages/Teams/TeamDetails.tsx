@@ -956,24 +956,6 @@ export default function TeamDetails() {
           </>
         )}
       </TabPanel>
-      {/* Conditional Tab: Pending Posts (Media Team/Leader Only) */}
-      {/* {(isMediaTeam || isLeader) && (
-        <TabPanel value={tabValue} index={tabIndexMap["pendingPosts"]}>
-          <Typography
-            variant="h5"
-            sx={{ display: "flex", alignItems: "center", gap: 1 }}
-          >
-            <PhotoSizeSelectActualOutlined /> Pending Posts
-          </Typography>
-
-          <Paper sx={{ p: 3, mt: 2 }}>
-            <Typography color="text.secondary">
-              Only visible to the Media Team and Leader. Here you will list
-              posts awaiting review/approval.
-            </Typography>
-          </Paper>
-        </TabPanel>
-      )} */}
       {/* Conditional Tab: Join Requests (HR Team/Leader Only) */}
       {(isHR || isLeader) && (
         <TabPanel value={tabValue} index={tabIndexMap["joinRequests"]}>
