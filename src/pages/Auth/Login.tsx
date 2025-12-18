@@ -21,7 +21,15 @@ import { useAuth } from '../../context/AuthContext';
 import Snowfall from 'react-snowfall'
 
 const schema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: z
+  .email("Invalid email format")
+  .refine(
+    (email) =>
+      email.endsWith("@gmail.com") || email.endsWith("@webxio.pro"),
+    {
+      message: "Email must be a @gmail.com or @webxio.pro address",
+    }
+  ),
   userPassword: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
