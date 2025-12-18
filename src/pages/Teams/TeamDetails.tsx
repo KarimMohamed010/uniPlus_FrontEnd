@@ -37,6 +37,7 @@ import {
   MenuItem,
   ImageList,
   ImageListItem,
+  Snackbar,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import {
@@ -55,7 +56,7 @@ import EventsList from "../Events/EventsList";
 import { useNavigate } from "react-router-dom";
 import { FileUploaderRegular } from "@uploadcare/react-uploader";
 import "@uploadcare/react-uploader/core.css";
-import FeedPostCard ,{type FeedPost} from '../../components/FeedPostCard'
+import FeedPostCard, { type FeedPost } from '../../components/FeedPostCard'
 
 // --- Styled Components for the Layout ---
 const TeamBanner = styled(Box)(({ theme }) => ({
@@ -198,6 +199,13 @@ export default function TeamDetails() {
     : undefined;
   const isAdmin = userGlobalRole === "admin";
 
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: "success" | "error";
+  }>({ open: false, message: "", severity: "success" });
+
+
   const {
     data: team,
     isLoading,
@@ -276,6 +284,40 @@ export default function TeamDetails() {
     !isLeader && mediaTeamArray.some((member) => member.id === userID); // --- Handlers ---
 
   const {
+    data: reportedPosts,
+    isLoading: isReportedLoading,
+  } = useQuery<any[]>({
+    queryKey: ["reportedPosts", id],
+    queryFn: async () => {
+      const res = await client.get(`/posts/team/${id}/reported`);
+      return Array.isArray(res.data?.posts) ? res.data.posts : [];
+    },
+    enabled: !!id && (isMediaTeam || isLeader),
+  });
+
+  const deletePostMutation = useMutation({
+    mutationFn: async (postId: number) => {
+      return await client.delete(`/posts/${postId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reportedPosts", id] });
+      queryClient.invalidateQueries({ queryKey: ["teamPosts", id] });
+      setSnackbar({
+        open: true,
+        message: "Post removed successfully",
+        severity: "success",
+      });
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || "Failed to remove post",
+        severity: "error",
+      });
+    },
+  });
+
+  const {
     data: teamPosts,
     isLoading: isPostsLoading,
     error: postsError,
@@ -351,7 +393,7 @@ export default function TeamDetails() {
     },
     enabled: !!id,
   });
-    const addCommentMutation = useMutation({
+  const addCommentMutation = useMutation({
     mutationFn: async ({
       postId,
       content,
@@ -517,6 +559,9 @@ export default function TeamDetails() {
   // }
   if (isHR || isLeader) {
     conditionalTabs.push({ label: "Join Requests", id: "joinRequests" });
+  }
+  if (isMediaTeam || isLeader) {
+    conditionalTabs.push({ label: "Reported Posts", id: "reportedPosts" });
   }
 
   const allTabs = [...fixedTabs, ...conditionalTabs];
@@ -896,44 +941,44 @@ export default function TeamDetails() {
             </Paper>
           ) : (
             <Stack spacing={2}>
-             {(teamPosts || []).map((post) => {
-              const isOpen = !!expandedComments[post.id];
-              return (
-                <FeedPostCard
-                  key={post.id}
-                  post={post}
-                  isOpen={isOpen}
-                  onToggle={() =>
-                    setExpandedComments((prev) => ({
-                      ...prev,
-                      [post.id]: !prev[post.id],
-                    }))
-                  }
-                  commentDraft={commentDrafts[post.id] || ""}
-                  setCommentDraft={(value) =>
-                    setCommentDrafts((prev) => ({
-                      ...prev,
-                      [post.id]: value,
-                    }))
-                  }
-                  commentError={commentErrors[post.id]}
-                  clearCommentError={() =>
-                    setCommentErrors((prev) => ({ ...prev, [post.id]: "" }))
-                  }
-                  canComment={canComment && !addCommentMutation.isPending}
-                  onSubmitComment={(content) => {
-                    if (!content) {
-                      setCommentErrors((prev) => ({
+              {(teamPosts || []).map((post) => {
+                const isOpen = !!expandedComments[post.id];
+                return (
+                  <FeedPostCard
+                    key={post.id}
+                    post={post}
+                    isOpen={isOpen}
+                    onToggle={() =>
+                      setExpandedComments((prev) => ({
                         ...prev,
-                        [post.id]: "Comment can't be empty",
-                      }));
-                      return;
+                        [post.id]: !prev[post.id],
+                      }))
                     }
-                    addCommentMutation.mutate({ postId: post.id, content });
-                  }}
-                />
-              );
-            })}
+                    commentDraft={commentDrafts[post.id] || ""}
+                    setCommentDraft={(value) =>
+                      setCommentDrafts((prev) => ({
+                        ...prev,
+                        [post.id]: value,
+                      }))
+                    }
+                    commentError={commentErrors[post.id]}
+                    clearCommentError={() =>
+                      setCommentErrors((prev) => ({ ...prev, [post.id]: "" }))
+                    }
+                    canComment={canComment && !addCommentMutation.isPending}
+                    onSubmitComment={(content) => {
+                      if (!content) {
+                        setCommentErrors((prev) => ({
+                          ...prev,
+                          [post.id]: "Comment can't be empty",
+                        }));
+                        return;
+                      }
+                      addCommentMutation.mutate({ postId: post.id, content });
+                    }}
+                  />
+                );
+              })}
             </Stack>
           )}
         </Box>
@@ -1037,6 +1082,89 @@ export default function TeamDetails() {
           </Paper>
         </TabPanel>
       )}
+
+      {/* Conditional Tab: Reported Posts (Media Team/Leader Only) */}
+      {(isMediaTeam || isLeader) && (
+        <TabPanel value={tabValue} index={tabIndexMap["reportedPosts"]}>
+          <Typography variant="h5" sx={{ mb: 2 }}>
+            Reported Posts
+          </Typography>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                  <TableCell sx={{ fontWeight: "bold" }}>Creator Name</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>Email</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>Time Published</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                    Action
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {isReportedLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                      <CircularProgress size={24} />
+                    </TableCell>
+                  </TableRow>
+                ) : (reportedPosts || []).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                      <Typography color="text.secondary">
+                        No reported posts.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  (reportedPosts || []).map((report: any) => (
+                    <TableRow key={report.post_id}>
+                      <TableCell>{report.creator_name}</TableCell>
+                      <TableCell>{report.creator_email}</TableCell>
+                      <TableCell>
+                        {new Date(report.published_at).toLocaleString()}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          variant="contained"
+                          color="error"
+                          size="small"
+                          disabled={deletePostMutation.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                "Are you sure you want to remove this post?"
+                              )
+                            ) {
+                              deletePostMutation.mutate(report.post_id);
+                            }
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </TabPanel>
+      )}
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
       {/* Edit Team Dialog */}
       {isLeader && (
         <Dialog open={openEdit} onClose={() => setOpenEdit(false)}>
