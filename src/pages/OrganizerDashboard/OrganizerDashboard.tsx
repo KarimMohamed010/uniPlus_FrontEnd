@@ -24,6 +24,8 @@ import { Videocam } from "@mui/icons-material";
 import { useAuth } from "../../context/AuthContext.tsx";
 import client from "../../api/client.ts";
 import jsQR from "jsqr";
+import { FileUploaderRegular } from '@uploadcare/react-uploader';
+import '@uploadcare/react-uploader/core.css';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -59,6 +61,12 @@ export default function OrganizerDashboard() {
     { timestamp: string; success: boolean; result?: string }[]
   >([]);
 
+  const [attendedStudents, setAttendedStudents] = useState<any[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
+  const [userEvents, setUserEvents] = useState<any[]>([]);
+  const uploaderRefs = useRef<{ [key: string]: any }>({});
+
   const hasTeamRole =
     user?.roles.global === "student" && user?.roles.team?.length > 0;
 
@@ -71,6 +79,73 @@ export default function OrganizerDashboard() {
       </Box>
     );
   }
+
+  /* -------------------- Fetch user's events -------------------- */
+  useEffect(() => {
+    const fetchUserEvents = async () => {
+      try {
+        // Fetch events for teams where user is an organizer
+        const teamIds = user?.roles.team?.map((t: any) => t.teamId) || [];
+        const eventsPromises = teamIds.map((teamId: number) =>
+          client.get(`/events/team/${teamId}`)
+        );
+        const eventsResponses = await Promise.all(eventsPromises);
+        const allEvents = eventsResponses.flatMap((res) => res.data.events);
+        
+        // Remove duplicates by event ID
+        const uniqueEvents = allEvents.filter(
+          (event, index, self) => index === self.findIndex((e) => e.id === event.id)
+        );
+        
+        setUserEvents(uniqueEvents);
+      } catch (error) {
+        console.error("Failed to fetch events:", error);
+      }
+    };
+
+    if (hasTeamRole) {
+      fetchUserEvents();
+    }
+  }, [user, hasTeamRole]);
+
+  /* -------------------- Fetch attended students -------------------- */
+  const fetchAttendedStudents = async (eventId: number) => {
+    setLoadingStudents(true);
+    try {
+      const response = await client.get(`/events/${eventId}/attended`);
+      setAttendedStudents(response.data.students);
+    } catch (error) {
+      console.error("Failed to fetch attended students:", error);
+      setError("Failed to load attended students");
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
+  /* -------------------- Handle certificate upload -------------------- */
+  const handleCertificateUpload = async (studentId: number, certUrl: string) => {
+    try {
+      setLoading(true);
+      await client.patch("/tickets/certificate", {
+        eventId: selectedEvent,
+        studentId,
+        certUrl,
+      });
+      
+      // Refresh the attended students list
+      if (selectedEvent) {
+        fetchAttendedStudents(selectedEvent);
+      }
+      
+      setResult({ message: "Certificate issued successfully!" });
+      setResultOpen(true);
+    } catch (error: any) {
+      setError(error.response?.data?.error || "Failed to issue certificate");
+      setResultOpen(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   /* -------------------- Camera lifecycle -------------------- */
 
@@ -197,6 +272,7 @@ export default function OrganizerDashboard() {
           <Tab label="QR Scanner" />
           <Tab label="Your Teams" />
           <Tab label="Scan History" />
+          <Tab label="Issue Certificates" />
         </Tabs>
         <TabPanel value={tabValue} index={0}>
           <Button
@@ -254,6 +330,117 @@ export default function OrganizerDashboard() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </TabPanel>
+        <TabPanel value={tabValue} index={3}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Issue Certificates
+          </Typography>
+          
+          {/* Event Selector */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Select an event:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {userEvents.map((event) => (
+                <Button
+                  key={event.id}
+                  variant={selectedEvent === event.id ? "contained" : "outlined"}
+                  onClick={() => {
+                    setSelectedEvent(event.id);
+                    fetchAttendedStudents(event.id);
+                  }}
+                >
+                  {event.title}
+                </Button>
+              ))}
+            </Box>
+          </Box>
+
+          {/* Attended Students Table */}
+          {selectedEvent && (
+            <>
+              {loadingStudents ? (
+                <CircularProgress />
+              ) : attendedStudents.length === 0 ? (
+                <Alert severity="info">No students have attended this event yet.</Alert>
+              ) : (
+                <TableContainer component={Paper}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Student Name</TableCell>
+                        <TableCell>Email</TableCell>
+                        <TableCell>Certificate Status</TableCell>
+                        <TableCell>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {attendedStudents.map((student) => (
+                        <TableRow key={student.studentId}>
+                          <TableCell>{student.studentName}</TableCell>
+                          <TableCell>{student.email}</TableCell>
+                          <TableCell>
+                            {student.certificationUrl ? (
+                              <Typography color="success.main">Issued</Typography>
+                            ) : (
+                              <Typography color="text.secondary">Not Issued</Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {!student.certificationUrl && (
+                              <Box sx={{ maxWidth: 300 }}>
+                                <FileUploaderRegular
+                                  apiRef={(ref) => {
+                                    uploaderRefs.current[student.studentId] = ref;
+                                  }}
+                                  sourceList="local,camera,gdrive"
+                                  classNameUploader="uc-light"
+                                  pubkey="1ed9d5259738cb825f1c"
+                                  imgOnly={true}
+                                  onChange={(items) => {
+                                    const successFile = items.allEntries.find(
+                                      (f) => f.status === 'success'
+                                    );
+                                    if (successFile) {
+                                      // Store the file temporarily
+                                      uploaderRefs.current[`file_${student.studentId}`] = successFile;
+                                    }
+                                  }}
+                                  onDoneClick={() => {
+                                    const file = uploaderRefs.current[`file_${student.studentId}`];
+                                    if (file && file.cdnUrl) {
+                                      handleCertificateUpload(
+                                        student.studentId,
+                                        file.cdnUrl
+                                      );
+                                      // Clean up
+                                      delete uploaderRefs.current[`file_${student.studentId}`];
+                                    }
+                                  }}
+                                  multiple={false}
+                                />
+                              </Box>
+                            )}
+                            {student.certificationUrl && (
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                href={student.certificationUrl}
+                                target="_blank"
+                              >
+                                View Certificate
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </>
           )}
         </TabPanel>
       </Paper>

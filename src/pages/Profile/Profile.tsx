@@ -61,8 +61,10 @@ export default function Profile() {
 
   const [posts, setPosts] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [certificates, setCertificates] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [loadingTeams, setLoadingTeams] = useState(false);
+  const [loadingCertificates, setLoadingCertificates] = useState(false);
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
@@ -142,6 +144,17 @@ export default function Profile() {
         console.error("Failed to fetch teams", e);
       } finally {
         setLoadingTeams(false);
+      }
+
+      // Fetch certificates
+      setLoadingCertificates(true);
+      try {
+        const certificatesRes = await client.get(`/tickets/certificates/${viewedUser.id}`);
+        setCertificates(certificatesRes.data.certificates);
+      } catch (e) {
+        console.error("Failed to fetch certificates", e);
+      } finally {
+        setLoadingCertificates(false);
       }
     };
 
@@ -783,6 +796,47 @@ export default function Profile() {
             </Grid>
           ) : (
             <Typography color="text.secondary">Not subscribed to any teams.</Typography>
+          )}
+        </Grid>
+
+        {/* User's Certificates */}
+        <Grid size={{ xs: 12 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Certificates</Typography>
+          {loadingCertificates ? (
+            <CircularProgress />
+          ) : certificates.length > 0 ? (
+            <Grid container spacing={2}>
+              {certificates.map((cert: any, index: number) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
+                  <Card>
+                    <CardContent>
+                      <Box
+                        component="img"
+                        src={cert.certificationUrl}
+                        alt={`Certificate for ${cert.event.title}`}
+                        sx={{
+                          width: '100%',
+                          height: 200,
+                          objectFit: 'cover',
+                          borderRadius: 1,
+                          mb: 2,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => window.open(cert.certificationUrl, '_blank')}
+                      />
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {cert.event.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {cert.team?.name || 'No team'}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Typography color="text.secondary">No certificates earned yet.</Typography>
           )}
         </Grid>
 
