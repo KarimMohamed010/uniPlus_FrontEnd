@@ -25,13 +25,14 @@ import {
 import {
   Delete as DeleteIcon,
   Edit as EditIcon,
-  AddPhotoAlternate as AddPhotoIcon,
   Cancel as CancelIcon,
   ChatBubbleOutline as ReplyIcon,
+  ReportProblem as ReportIcon,
 } from "@mui/icons-material";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import client from "../api/client";
 import { FileUploaderRegular } from "@uploadcare/react-uploader";
+import "@uploadcare/react-uploader/core.css";
 
 // --- Types ---
 export type FeedPost = {
@@ -63,7 +64,6 @@ type CommentItem = {
 
 type CommentNode = CommentItem & { children: CommentNode[] };
 
-// --- Component ---
 function FeedPostCard({
   post,
   isOpen,
@@ -82,9 +82,11 @@ function FeedPostCard({
 }) {
   const queryClient = useQueryClient();
 
-  // --- States ---
+  // --- UI States ---
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
   const [commentToDelete, setCommentToDelete] = useState<number | null>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -98,7 +100,6 @@ function FeedPostCard({
   const [localPost, setLocalPost] = useState(post);
   const uploadedUrlsRef = useRef<Set<string>>(new Set());
 
-  // Sync local post state when post prop changes
   useEffect(() => {
     setLocalPost(post);
   }, [post]);
@@ -111,13 +112,11 @@ function FeedPostCard({
     }
   }, [editDialogOpen, post]);
 
-  // --- Comment States ---
   const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({});
   const [replyOpen, setReplyOpen] = useState<Record<number, boolean>>({});
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editDrafts, setEditDrafts] = useState<Record<number, string>>({});
 
-  // --- Auth logic ---
   const userJsonString = localStorage.getItem("user");
   const parsedUser = userJsonString ? JSON.parse(userJsonString) : null;
   const userID = parsedUser ? parseInt(parsedUser.id, 10) : 0;
@@ -131,47 +130,51 @@ function FeedPostCard({
       return response.data;
     },
     onSuccess: (data) => {
+      queryClient.setQueryData(["feed"], (oldData: any) => {
+        if (!oldData) return oldData;
+        const updateFunc = (p: FeedPost) =>
+          p.id === post.id ? { ...p, ...(data.post || data) } : p;
+        if (Array.isArray(oldData)) return oldData.map(updateFunc);
+        if (oldData.posts)
+          return { ...oldData, posts: oldData.posts.map(updateFunc) };
+        return oldData;
+      });
+      queryClient.invalidateQueries({ queryKey: ["feed"] });
       setSnackbar({
         open: true,
         message: "Post updated!",
         severity: "success",
       });
       setEditDialogOpen(false);
-      
-      // Update the post in cache immediately without refetching
-      queryClient.setQueryData(["feed"], (oldData: any) => {
-        if (!oldData) return oldData;
-        
-        // Handle if feed data is in different structures
-        if (Array.isArray(oldData)) {
-          return oldData.map((p: FeedPost) =>
-            p.id === post.id ? { ...p, ...data.post || data } : p
-          );
-        }
-        
-        if (oldData.posts && Array.isArray(oldData.posts)) {
-          return {
-            ...oldData,
-            posts: oldData.posts.map((p: FeedPost) =>
-              p.id === post.id ? { ...p, ...data.post || data } : p
-            ),
-          };
-        }
-        
-        return oldData;
-      });
-      
-      // Also invalidate to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ["feed"] });
     },
     onError: (err: any) => {
       setSnackbar({
         open: true,
-        message:
-          err?.response?.data?.message ||
-          (err?.response?.data && JSON.stringify(err.response.data)) ||
-          err?.message ||
-          "Validation Failed",
+        message: err?.response?.data?.message || "Update Failed",
+        severity: "error",
+      });
+    },
+  });
+
+  const reportPostMutation = useMutation({
+    mutationFn: async (reportDescription: string) => {
+      await client.post(`/posts/${post.id}/report`, {
+        description: reportDescription,
+      });
+    },
+    onSuccess: () => {
+      setSnackbar({
+        open: true,
+        message: "Report submitted.",
+        severity: "info",
+      });
+      setReportDialogOpen(false);
+      setReportReason("");
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err?.response?.data?.message || "Report Failed",
         severity: "error",
       });
     },
@@ -192,8 +195,10 @@ function FeedPostCard({
     mutationFn: async ({ id, content }: { id: number; content: string }) => {
       await client.patch(`/comments/${id}`, { content });
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["postComments", post.id] }),
+    onSuccess: () => {
+      setEditingCommentId(null);
+      queryClient.invalidateQueries({ queryKey: ["postComments", post.id] });
+    },
   });
 
   const deleteCommentMutation = useMutation({
@@ -219,7 +224,7 @@ function FeedPostCard({
       queryClient.invalidateQueries({ queryKey: ["postComments", post.id] }),
   });
 
-  // --- Media Handlers ---
+  // --- Handlers ---
   const handleEditSubmit = () => {
     const payload = {
       description: editDescription,
@@ -229,38 +234,27 @@ function FeedPostCard({
           type: m.type,
           description: m.description || "",
         };
-        // Only include ID if it's a real number (existing in DB)
-        if (typeof m.id === "number" && m.id < 1000000000) {
-          item.id = m.id;
-        }
+        if (typeof m.id === "number" && m.id < 1000000000) item.id = m.id;
         return item;
       }),
     };
     editPostMutation.mutate(payload);
   };
 
-  // Fixed: Use Uploadcare uploader with duplicate prevention
   const handleUploadcareChange = (items: any) => {
     const entries = (items?.allEntries || []) as any[];
     const uploaded = entries
       .filter((f) => f?.status === "success" && f?.cdnUrl)
-      .map((f) => {
-        const url = String(f.cdnUrl);
-        const type =
-          (f?.mimeType as string | undefined) ||
-          (f?.fileInfo?.mimeType as string | undefined) ||
-          "image";
-        return { url, type } as any;
-      })
+      .map((f) => ({
+        url: String(f.cdnUrl),
+        type: (f?.fileInfo?.mimeType as string)?.split("/")[0] || "image",
+      }))
       .filter((item) => {
-        // Prevent duplicates
-        if (uploadedUrlsRef.current.has(item.url)) {
-          return false;
-        }
+        if (uploadedUrlsRef.current.has(item.url)) return false;
+        if (currentMedia.some((m) => m.url === item.url)) return false;
         uploadedUrlsRef.current.add(item.url);
         return true;
       });
-
     if (uploaded.length > 0) {
       setCurrentMedia((prev) => [...prev, ...uploaded]);
     }
@@ -284,46 +278,36 @@ function FeedPostCard({
     );
   };
 
-  // Handle Enter key for main comment
-  const handleCommentKeyPress = (e: React.KeyboardEvent) => {
+  const handleMainCommentKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (commentDraft.trim()) {
-        onSubmitComment(commentDraft);
-      }
+      if (commentDraft.trim()) onSubmitComment(commentDraft);
     }
   };
 
-  // Handle Enter key for replies
-  const handleReplyKeyPress = (e: React.KeyboardEvent, parentId: number) => {
+  const handleReplyKeyDown = (e: React.KeyboardEvent, parentId: number) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submitReply(parentId);
     }
   };
 
-  // Handle Enter key for comment edit
-  const handleEditCommentKeyPress = (e: React.KeyboardEvent, nodeId: number) => {
+  const handleEditCommentKeyDown = (e: React.KeyboardEvent, nodeId: number) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      editCommentMutation.mutate({
-        id: nodeId,
-        content: editDrafts[nodeId],
-      });
-      setEditingCommentId(null);
+      const text = editDrafts[nodeId]?.trim();
+      if (text) editCommentMutation.mutate({ id: nodeId, content: text });
     }
   };
 
-  // --- Comments Logic ---
+  // --- Comments Query ---
   const commentsQuery = useQuery<CommentItem[]>({
     queryKey: ["postComments", post.id],
     queryFn: async () => {
       const res = await client.get(`/comments/post/${post.id}`);
-      const rawComments = Array.isArray(res.data?.comments)
-        ? res.data.comments
-        : [];
+      const raw = Array.isArray(res.data?.comments) ? res.data.comments : [];
       return await Promise.all(
-        rawComments.map(async (c: CommentItem) => {
+        raw.map(async (c: CommentItem) => {
           if (!c.author) return c;
           try {
             const userRes = await client.get(`/users/id/${c.author}`);
@@ -351,11 +335,6 @@ function FeedPostCard({
     return roots;
   }, [commentsQuery.data]);
 
-  // Calculate comment count
-  const postComments = commentsQuery.data || [];
-  // const commentsCountToShow =
-  //   typeof post.commentCount === "number" ? post.commentCount : postComments.length;
-
   const renderNestedComment = (node: CommentNode, level: number) => (
     <Box key={node.id} sx={{ ml: level > 0 ? 3 : 0, mt: 2 }}>
       <Paper
@@ -376,7 +355,6 @@ function FeedPostCard({
               : "User"}
           </Typography>
         </Stack>
-
         {editingCommentId === node.id ? (
           <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
             <TextField
@@ -387,17 +365,15 @@ function FeedPostCard({
               onChange={(e) =>
                 setEditDrafts((p) => ({ ...p, [node.id]: e.target.value }))
               }
-              onKeyPress={(e) => handleEditCommentKeyPress(e, node.id)}
+              onKeyDown={(e) => handleEditCommentKeyDown(e, node.id)}
             />
             <Button
               size="small"
               variant="contained"
               onClick={() => {
-                editCommentMutation.mutate({
-                  id: node.id,
-                  content: editDrafts[node.id],
-                });
-                setEditingCommentId(null);
+                const text = editDrafts[node.id]?.trim();
+                if (text)
+                  editCommentMutation.mutate({ id: node.id, content: text });
               }}
             >
               Save
@@ -409,7 +385,6 @@ function FeedPostCard({
         ) : (
           <Typography variant="body2">{node.content}</Typography>
         )}
-
         <Stack
           direction="row"
           justifyContent="space-between"
@@ -418,7 +393,7 @@ function FeedPostCard({
         >
           <Button
             size="small"
-            startIcon={<ReplyIcon sx={{ fontSize: "1rem !important" }} />}
+            startIcon={<ReplyIcon sx={{ fontSize: "1rem" }} />}
             onClick={() =>
               setReplyOpen((p) => ({ ...p, [node.id]: !p[node.id] }))
             }
@@ -430,7 +405,7 @@ function FeedPostCard({
               {node.author === userID && (
                 <Button
                   size="small"
-                  startIcon={<EditIcon sx={{ fontSize: "1rem !important" }} />}
+                  startIcon={<EditIcon sx={{ fontSize: "1rem" }} />}
                   onClick={() => {
                     setEditingCommentId(node.id);
                     setEditDrafts((p) => ({ ...p, [node.id]: node.content }));
@@ -442,7 +417,7 @@ function FeedPostCard({
               <Button
                 size="small"
                 color="error"
-                startIcon={<DeleteIcon sx={{ fontSize: "1rem !important" }} />}
+                startIcon={<DeleteIcon sx={{ fontSize: "1rem" }} />}
                 onClick={() => setCommentToDelete(node.id)}
               >
                 Delete
@@ -450,7 +425,6 @@ function FeedPostCard({
             </Stack>
           )}
         </Stack>
-
         {replyOpen[node.id] && !editingCommentId && (
           <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
             <TextField
@@ -461,7 +435,7 @@ function FeedPostCard({
               onChange={(e) =>
                 setReplyDrafts((p) => ({ ...p, [node.id]: e.target.value }))
               }
-              onKeyPress={(e) => handleReplyKeyPress(e, node.id)}
+              onKeyDown={(e) => handleReplyKeyDown(e, node.id)}
             />
             <Button
               size="small"
@@ -488,26 +462,34 @@ function FeedPostCard({
         title={`${localPost.author?.fname} ${localPost.author?.lname}`}
         subheader={new Date(localPost.issuedAt).toLocaleString()}
         action={
-          isMyPost && (
-            <Stack direction="row" spacing={1}>
-              <Button
+          <Stack direction="row" spacing={0.5}>
+            {isMyPost ? (
+              <>
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={() => setEditDialogOpen(true)}
+                >
+                  <EditIcon />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </>
+            ) : (
+              <IconButton
                 size="small"
-                color="primary"
-                startIcon={<EditIcon />}
-                onClick={() => setEditDialogOpen(true)}
+                color="warning"
+                onClick={() => setReportDialogOpen(true)}
               >
-                Edit
-              </Button>
-              <Button
-                size="small"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={() => setDeleteDialogOpen(true)}
-              >
-                Delete
-              </Button>
-            </Stack>
-          )
+                <ReportIcon />
+              </IconButton>
+            )}
+          </Stack>
         }
       />
 
@@ -537,7 +519,7 @@ function FeedPostCard({
         <Button size="small" onClick={onToggle} sx={{ mt: 2 }}>
           {isOpen
             ? "Hide comments"
-            : `Show comments `}
+            : `Show comments (${commentsQuery.data?.length || 0})`}
         </Button>
 
         {isOpen && (
@@ -550,7 +532,7 @@ function FeedPostCard({
                 placeholder="Comment..."
                 value={commentDraft}
                 onChange={(e) => setCommentDraft(e.target.value)}
-                onKeyPress={handleCommentKeyPress}
+                onKeyDown={handleMainCommentKeyDown}
               />
               <Button
                 variant="contained"
@@ -564,7 +546,7 @@ function FeedPostCard({
         )}
       </CardContent>
 
-      {/* --- Edit Post Dialog --- */}
+      {/* Edit Dialog */}
       <Dialog
         open={editDialogOpen}
         onClose={() => setEditDialogOpen(false)}
@@ -588,8 +570,7 @@ function FeedPostCard({
             multiple={true}
             onChange={handleUploadcareChange}
           />
-
-          <ImageList cols={3} rowHeight={120} gap={8}>
+          <ImageList cols={3} rowHeight={120} gap={8} sx={{ mt: 2 }}>
             {currentMedia.map((item, index) => (
               <ImageListItem
                 key={item.id || index}
@@ -622,7 +603,6 @@ function FeedPostCard({
                 </IconButton>
               </ImageListItem>
             ))}
-            
           </ImageList>
         </DialogContent>
         <DialogActions>
@@ -641,14 +621,46 @@ function FeedPostCard({
         </DialogActions>
       </Dialog>
 
-      {/* --- Delete Dialogs --- */}
+      {/* Report Dialog */}
+      <Dialog
+        open={reportDialogOpen}
+        onClose={() => setReportDialogOpen(false)}
+      >
+        <DialogTitle>Report Post</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Why are you reporting this post?
+          </DialogContentText>
+          <TextField
+            fullWidth
+            multiline
+            rows={2}
+            placeholder="Reason..."
+            value={reportReason}
+            onChange={(e) => setReportReason(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReportDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => reportPostMutation.mutate(reportReason)}
+            color="warning"
+            variant="contained"
+            disabled={!reportReason.trim() || reportPostMutation.isPending}
+          >
+            {reportPostMutation.isPending ? "Sending..." : "Submit Report"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Dialogs */}
       <Dialog
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
       >
         <DialogTitle>Delete Post?</DialogTitle>
         <DialogContent>
-          <DialogContentText>This cannot be undone.</DialogContentText>
+          <DialogContentText>This action cannot be undone.</DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
