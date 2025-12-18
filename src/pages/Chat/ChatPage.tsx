@@ -19,8 +19,9 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  Badge,
 } from "@mui/material";
-import { Send, Add } from "@mui/icons-material";
+import { Send, Add, DoneAll, VerifiedUser } from "@mui/icons-material";
 import { useSocket } from "../../hooks/useSocket";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
@@ -47,6 +48,7 @@ interface ChatSession {
   seen?: boolean;
   isSystem?: boolean; // New Field
   imgUrl?: string;
+  isAdmin?: boolean;
 }
 
 // ... (skipping to component)
@@ -131,7 +133,8 @@ export default function ChatPage() {
             lastMessage: conv.lastMessage,
             lastMessageTime: conv.lastMessageTime,
             seen: conv.seen,
-            imgUrl: conv.imgUrl
+            imgUrl: conv.imgUrl,
+            isAdmin: conv.isAdmin
           });
         });
 
@@ -152,7 +155,8 @@ export default function ChatPage() {
                 lastMessage: conv.lastMessage,
                 lastMessageTime: conv.lastMessageTime,
                 seen: conv.seen,
-                imgUrl: conv.imgUrl
+                imgUrl: conv.imgUrl,
+                isAdmin: conv.isAdmin
               });
             }
           } else {
@@ -164,7 +168,8 @@ export default function ChatPage() {
               lastMessage: conv.lastMessage,
               lastMessageTime: conv.lastMessageTime,
               seen: conv.seen,
-              imgUrl: conv.imgUrl
+              imgUrl: conv.imgUrl,
+              isAdmin: conv.isAdmin
             });
           }
         });
@@ -417,6 +422,20 @@ export default function ChatPage() {
     );
   };
 
+  const handleMarkAllAsRead = async () => {
+    try {
+      await client.post("/messages/mark-all-read");
+      // Refresh the conversation list locally
+      setConversations((prev) =>
+        prev.map((c) => ({ ...c, seen: true }))
+      );
+      // Refresh global unread count
+      refreshUnreadCount();
+    } catch (error) {
+      console.error("Failed to mark all as read:", error);
+    }
+  };
+
   const startNewDm = async () => {
     if (!newChatId.trim()) return;
 
@@ -463,13 +482,23 @@ export default function ChatPage() {
           }}
         >
           <Typography variant="h6">Chats</Typography>
-          <Fab
-            size="small"
-            color="primary"
-            onClick={() => setOpenNewChat(true)}
-          >
-            <Add />
-          </Fab>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <IconButton
+              size="small"
+              color="primary"
+              title="Mark all as read"
+              onClick={handleMarkAllAsRead}
+            >
+              <DoneAll />
+            </IconButton>
+            <Fab
+              size="small"
+              color="primary"
+              onClick={() => setOpenNewChat(true)}
+            >
+              <Add />
+            </Fab>
+          </Box>
         </Box>
         {isLoading &&
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>
@@ -492,7 +521,14 @@ export default function ChatPage() {
                   )}
                 </ListItemAvatar>
                 <ListItemText
-                  primary={c.isSystem ? "System Announcements" : `${c.fname} ${c.lname}`}
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      {c.isSystem ? "System Announcements" : `${c.fname} ${c.lname}`}
+                      {c.isAdmin && (
+                        <VerifiedUser sx={{ fontSize: 16, color: 'primary.main' }} titleAccess="Admin" />
+                      )}
+                    </Box>
+                  }
                   secondary={
                     <Typography
                       variant="body2"
@@ -517,13 +553,18 @@ export default function ChatPage() {
         {activeChat ? (
           <>
             <Box sx={{ p: 1, borderBottom: "1px solid #eee", mb: 2 }}>
-              <Typography variant="h6">
+              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 {activeChat.isSystem ? (
                   "System Announcements"
                 ) : (
-                  <Link to={`/profile/${activeChat.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    {activeChat.fname} {activeChat.lname}
-                  </Link>
+                  <>
+                    <Link to={`/profile/${activeChat.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {activeChat.fname} {activeChat.lname}
+                    </Link>
+                    {activeChat.isAdmin && (
+                      <VerifiedUser sx={{ fontSize: 20, color: 'primary.main' }} titleAccess="Admin" />
+                    )}
+                  </>
                 )}
               </Typography>
             </Box>
