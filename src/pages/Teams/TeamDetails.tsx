@@ -37,6 +37,7 @@ import {
   MenuItem,
   ImageList,
   ImageListItem,
+  Snackbar,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import {
@@ -55,7 +56,7 @@ import EventsList from "../Events/EventsList";
 import { useNavigate } from "react-router-dom";
 import { FileUploaderRegular } from "@uploadcare/react-uploader";
 import "@uploadcare/react-uploader/core.css";
-import FeedPostCard ,{type FeedPost} from '../../components/FeedPostCard'
+import FeedPostCard, { type FeedPost } from '../../components/FeedPostCard'
 
 // --- Styled Components for the Layout ---
 const TeamBanner = styled(Box)(({ theme }) => ({
@@ -198,6 +199,13 @@ export default function TeamDetails() {
     : undefined;
   const isAdmin = userGlobalRole === "admin";
 
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: "success" | "error";
+  }>({ open: false, message: "", severity: "success" });
+
+
   const {
     data: team,
     isLoading,
@@ -258,22 +266,57 @@ export default function TeamDetails() {
       ? teamMembers.some((member) => member.id === userID)
       : false; // Filter members into categories
 
+
   const isSubscribed = !!mySubscribedTeams?.some(
     (t: any) => t?.id === team?.id
   );
 
   const organizersArray: TeamMember[] =
-    teamMembers?.filter((member) => member.role === "organizer") || [];
+    teamMembers?.filter((member) => member.role?.toLowerCase() === "organizer") || [];
   const hrArray: TeamMember[] =
-    teamMembers?.filter((member) => member.role === "hr") || [];
+    teamMembers?.filter((member) => member.role?.toLowerCase() === "hr") || [];
   const mediaTeamArray: TeamMember[] =
-    teamMembers?.filter((member) => member.role === "mediaTeam") || []; // 5. Specific Role Checks
+    teamMembers?.filter((member) => member.role?.toLowerCase() === "mediateam") || []; // 5. Specific Role Checks
 
   const isOrganizer =
     !isLeader && organizersArray.some((member) => member.id === userID);
   const isHR = !isLeader && hrArray.some((member) => member.id === userID);
   const isMediaTeam =
     !isLeader && mediaTeamArray.some((member) => member.id === userID); // --- Handlers ---
+
+  const {
+    data: reportedPosts,
+    isLoading: isReportedLoading,
+  } = useQuery<any[]>({
+    queryKey: ["reportedPosts", id],
+    queryFn: async () => {
+      const res = await client.get(`/posts/team/${id}/reported`);
+      return Array.isArray(res.data?.posts) ? res.data.posts : [];
+    },
+    enabled: !!id && (isMediaTeam || isLeader),
+  });
+
+  const deletePostMutation = useMutation({
+    mutationFn: async (postId: number) => {
+      return await client.delete(`/posts/${postId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reportedPosts", id] });
+      queryClient.invalidateQueries({ queryKey: ["teamPosts", id] });
+      setSnackbar({
+        open: true,
+        message: "Post removed successfully",
+        severity: "success",
+      });
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || "Failed to remove post",
+        severity: "error",
+      });
+    },
+  });
 
   const {
     data: teamPosts,
@@ -334,7 +377,11 @@ export default function TeamDetails() {
       setJoinDialogOpen(false);
       setCvUrl("");
       setJoinError("");
-      alert("Application submitted successfully!");
+      setSnackbar({
+        open: true,
+        message: "Application submitted successfully!",
+        severity: "success",
+      });
     },
     onError: (err: any) => {
       // This will now catch the specific validation error if it fails again
@@ -342,16 +389,54 @@ export default function TeamDetails() {
     },
   });
 
-  const { data: applications } = useQuery({
+  const { data: applications, isLoading: isAppsLoading } = useQuery<any[]>({
     queryKey: ["teamApps", id],
     queryFn: async () => {
-      // This calls the router.get("/teams/:teamId/applications", ...)
       const res = await client.get(`/teams/${id}/applications`);
-      return res.data;
+      return Array.isArray(res.data) ? res.data : [];
     },
-    enabled: !!id,
+    enabled: !!id && (isLeader || isHR),
   });
-    const addCommentMutation = useMutation({
+
+  const hasApplied = applications && applications.length > 0
+    ? applications.some((app: any) => app.studentId === userID)
+    : false;
+
+  const acceptAppMutation = useMutation({
+    mutationFn: async (studentId: number) => {
+      return await client.post(`/teams/${id}/applications/${studentId}/accept`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teamApps", id] });
+      queryClient.invalidateQueries({ queryKey: ["teamMembers", id] });
+      setSnackbar({ open: true, message: "Application accepted", severity: "success" });
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || "Failed to accept application",
+        severity: "error",
+      });
+    },
+  });
+
+  const rejectAppMutation = useMutation({
+    mutationFn: async (studentId: number) => {
+      return await client.post(`/teams/${id}/applications/${studentId}/reject`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teamApps", id] });
+      setSnackbar({ open: true, message: "Application rejected", severity: "success" });
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || "Failed to reject application",
+        severity: "error",
+      });
+    },
+  });
+  const addCommentMutation = useMutation({
     mutationFn: async ({
       postId,
       content,
@@ -426,8 +511,26 @@ export default function TeamDetails() {
     setJoinDialogOpen(true);
   };
 
+  const leaveTeamMutation = useMutation({
+    mutationFn: async () => {
+      return await client.delete(`/teams/${id}/leave`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teamDetail", id] });
+      queryClient.invalidateQueries({ queryKey: ["teamMembers", id] });
+      setSnackbar({ open: true, message: "Left team successfully", severity: "success" });
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || "Failed to leave team",
+        severity: "error",
+      });
+    },
+  });
+
   const handleLeaveAction = () => {
-    prompt("Action: Leave Team");
+    leaveTeamMutation.mutate();
   };
   const subscribeMutation = useMutation({
     mutationFn: async () => {
@@ -516,7 +619,10 @@ export default function TeamDetails() {
   //   conditionalTabs.push({ label: "Pending Posts", id: "pendingPosts" });
   // }
   if (isHR || isLeader) {
-    conditionalTabs.push({ label: "Join Requests", id: "joinRequests" });
+    conditionalTabs.push({ label: "Pending Applications", id: "joinRequests" });
+  }
+  if (isMediaTeam || isLeader) {
+    conditionalTabs.push({ label: "Reported Posts", id: "reportedPosts" });
   }
 
   const allTabs = [...fixedTabs, ...conditionalTabs];
@@ -662,7 +768,7 @@ export default function TeamDetails() {
           </Button>
         )}
         {/* Button: Apply to Join (If NOT a member) */}
-        {!isMember && (
+        {!isMember && !hasApplied && (
           <Button
             sx={{ ml: "auto" }}
             variant="outlined"
@@ -673,6 +779,7 @@ export default function TeamDetails() {
             Apply For a Role
           </Button>
         )}
+
         {/* Button: Leave Team (If IS a member AND NOT the leader) */}
         {isMember && !isLeader && (
           <Button
@@ -896,44 +1003,44 @@ export default function TeamDetails() {
             </Paper>
           ) : (
             <Stack spacing={2}>
-             {(teamPosts || []).map((post) => {
-              const isOpen = !!expandedComments[post.id];
-              return (
-                <FeedPostCard
-                  key={post.id}
-                  post={post}
-                  isOpen={isOpen}
-                  onToggle={() =>
-                    setExpandedComments((prev) => ({
-                      ...prev,
-                      [post.id]: !prev[post.id],
-                    }))
-                  }
-                  commentDraft={commentDrafts[post.id] || ""}
-                  setCommentDraft={(value) =>
-                    setCommentDrafts((prev) => ({
-                      ...prev,
-                      [post.id]: value,
-                    }))
-                  }
-                  commentError={commentErrors[post.id]}
-                  clearCommentError={() =>
-                    setCommentErrors((prev) => ({ ...prev, [post.id]: "" }))
-                  }
-                  canComment={canComment && !addCommentMutation.isPending}
-                  onSubmitComment={(content) => {
-                    if (!content) {
-                      setCommentErrors((prev) => ({
+              {(teamPosts || []).map((post) => {
+                const isOpen = !!expandedComments[post.id];
+                return (
+                  <FeedPostCard
+                    key={post.id}
+                    post={post}
+                    isOpen={isOpen}
+                    onToggle={() =>
+                      setExpandedComments((prev) => ({
                         ...prev,
-                        [post.id]: "Comment can't be empty",
-                      }));
-                      return;
+                        [post.id]: !prev[post.id],
+                      }))
                     }
-                    addCommentMutation.mutate({ postId: post.id, content });
-                  }}
-                />
-              );
-            })}
+                    commentDraft={commentDrafts[post.id] || ""}
+                    setCommentDraft={(value) =>
+                      setCommentDrafts((prev) => ({
+                        ...prev,
+                        [post.id]: value,
+                      }))
+                    }
+                    commentError={commentErrors[post.id]}
+                    clearCommentError={() =>
+                      setCommentErrors((prev) => ({ ...prev, [post.id]: "" }))
+                    }
+                    canComment={canComment && !addCommentMutation.isPending}
+                    onSubmitComment={(content) => {
+                      if (!content) {
+                        setCommentErrors((prev) => ({
+                          ...prev,
+                          [post.id]: "Comment can't be empty",
+                        }));
+                        return;
+                      }
+                      addCommentMutation.mutate({ postId: post.id, content });
+                    }}
+                  />
+                );
+              })}
             </Stack>
           )}
         </Box>
@@ -995,21 +1102,162 @@ export default function TeamDetails() {
       {/* Conditional Tab: Join Requests (HR Team/Leader Only) */}
       {(isHR || isLeader) && (
         <TabPanel value={tabValue} index={tabIndexMap["joinRequests"]}>
-          <Typography
-            variant="h5"
-            sx={{ display: "flex", alignItems: "center", gap: 1 }}
-          >
-            <MailOutline /> Join Requests
+          <Typography variant="h5" sx={{ mb: 2 }}>
+            Pending Applications
           </Typography>
 
-          <Paper sx={{ p: 3, mt: 2 }}>
-            <Typography color="text.secondary">
-              Only visible to the HR Team and Leader. Here you will manage
-              applications to join the team.
-            </Typography>
-          </Paper>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                  <TableCell sx={{ fontWeight: "bold" }}>Applicant Name</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>Required Role</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>CV</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: "bold" }}>Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {isAppsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                      <CircularProgress size={24} />
+                    </TableCell>
+                  </TableRow>
+                ) : (applications || []).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                      <Typography color="text.secondary">No pending applications.</Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  (applications || []).map((app: any) => (
+                    <TableRow key={app.studentId}>
+                      <TableCell>{`${app.fname} ${app.lname}`}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={app.role}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          href={app.cvUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          View CV
+                        </Button>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Button
+                            variant="contained"
+                            color="success"
+                            size="small"
+                            onClick={() => acceptAppMutation.mutate(app.studentId)}
+                            disabled={acceptAppMutation.isPending || rejectAppMutation.isPending}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            color="error"
+                            size="small"
+                            onClick={() => rejectAppMutation.mutate(app.studentId)}
+                            disabled={acceptAppMutation.isPending || rejectAppMutation.isPending}
+                          >
+                            Reject
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </TabPanel>
       )}
+
+      {/* Conditional Tab: Reported Posts (Media Team/Leader Only) */}
+      {(isMediaTeam || isLeader) && (
+        <TabPanel value={tabValue} index={tabIndexMap["reportedPosts"]}>
+          <Typography variant="h5" sx={{ mb: 2 }}>
+            Reported Posts
+          </Typography>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                  <TableCell sx={{ fontWeight: "bold" }}>Creator Name</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>Email</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>Time Published</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                    Action
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {isReportedLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                      <CircularProgress size={24} />
+                    </TableCell>
+                  </TableRow>
+                ) : (reportedPosts || []).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                      <Typography color="text.secondary">
+                        No reported posts.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  (reportedPosts || []).map((report: any) => (
+                    <TableRow key={report.post_id}>
+                      <TableCell>{report.creator_name}</TableCell>
+                      <TableCell>{report.creator_email}</TableCell>
+                      <TableCell>
+                        {new Date(report.published_at).toLocaleString()}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          variant="contained"
+                          color="error"
+                          size="small"
+                          disabled={deletePostMutation.isPending}
+                          onClick={() => {
+                            deletePostMutation.mutate(report.post_id);
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </TabPanel>
+      )}
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
       {/* Edit Team Dialog */}
       {isLeader && (
         <Dialog open={openEdit} onClose={() => setOpenEdit(false)}>

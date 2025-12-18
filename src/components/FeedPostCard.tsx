@@ -1,3 +1,4 @@
+import React from "react";
 import {
   Alert,
   Avatar,
@@ -13,7 +14,14 @@ import {
   Stack,
   TextField,
   Typography,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Snackbar,
 } from "@mui/material";
+import { Report as ReportIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -73,6 +81,36 @@ function FeedPostCard({
   onSubmitComment: (content: string) => void;
 }) {
   const navigate = useNavigate();
+  const [reportDialogOpen, setReportDialogOpen] = React.useState(false);
+  const [reportReason, setReportReason] = React.useState("");
+  const [snackbar, setSnackbar] = React.useState<{
+    open: boolean;
+    message: string;
+    severity: "success" | "error";
+  }>({ open: false, message: "", severity: "success" });
+
+  const handleReportSubmit = async () => {
+    if (!reportReason.trim()) return;
+    try {
+      await client.post(`/posts/${post.id}/report`, {
+        description: reportReason,
+      });
+      setSnackbar({
+        open: true,
+        message: "Post reported successfully",
+        severity: "success",
+      });
+      setReportDialogOpen(false);
+      setReportReason("");
+    } catch (err: any) {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || "Failed to report post",
+        severity: "error",
+      });
+    }
+  };
+
   const queryClient = useQueryClient();
 
   const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({});
@@ -321,6 +359,16 @@ function FeedPostCard({
         subheader={
           post.issuedAt ? new Date(post.issuedAt).toLocaleString() : ""
         }
+        action={
+          <IconButton
+            size="small"
+            color="error"
+            onClick={() => setReportDialogOpen(true)}
+            title="Report Post"
+          >
+            <ReportIcon fontSize="small" />
+          </IconButton>
+        }
       />
 
       <CardContent sx={{ pt: 0 }}>
@@ -404,6 +452,53 @@ function FeedPostCard({
           </Box>
         )}
       </CardContent>
+
+      <Dialog
+        open={reportDialogOpen}
+        onClose={() => setReportDialogOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Report Post</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Please provide a reason for reporting this post.
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            placeholder="Reason..."
+            value={reportReason}
+            onChange={(e) => setReportReason(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReportDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleReportSubmit}
+            variant="contained"
+            color="error"
+            disabled={!reportReason.trim()}
+          >
+            Report
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Card>
   );
 }
