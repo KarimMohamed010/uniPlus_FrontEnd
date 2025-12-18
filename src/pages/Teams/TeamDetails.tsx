@@ -266,16 +266,17 @@ export default function TeamDetails() {
       ? teamMembers.some((member) => member.id === userID)
       : false; // Filter members into categories
 
+
   const isSubscribed = !!mySubscribedTeams?.some(
     (t: any) => t?.id === team?.id
   );
 
   const organizersArray: TeamMember[] =
-    teamMembers?.filter((member) => member.role === "organizer") || [];
+    teamMembers?.filter((member) => member.role?.toLowerCase() === "organizer") || [];
   const hrArray: TeamMember[] =
-    teamMembers?.filter((member) => member.role === "hr") || [];
+    teamMembers?.filter((member) => member.role?.toLowerCase() === "hr") || [];
   const mediaTeamArray: TeamMember[] =
-    teamMembers?.filter((member) => member.role === "mediaTeam") || []; // 5. Specific Role Checks
+    teamMembers?.filter((member) => member.role?.toLowerCase() === "mediateam") || []; // 5. Specific Role Checks
 
   const isOrganizer =
     !isLeader && organizersArray.some((member) => member.id === userID);
@@ -376,7 +377,11 @@ export default function TeamDetails() {
       setJoinDialogOpen(false);
       setCvUrl("");
       setJoinError("");
-      alert("Application submitted successfully!");
+      setSnackbar({
+        open: true,
+        message: "Application submitted successfully!",
+        severity: "success",
+      });
     },
     onError: (err: any) => {
       // This will now catch the specific validation error if it fails again
@@ -384,14 +389,52 @@ export default function TeamDetails() {
     },
   });
 
-  const { data: applications } = useQuery({
+  const { data: applications, isLoading: isAppsLoading } = useQuery<any[]>({
     queryKey: ["teamApps", id],
     queryFn: async () => {
-      // This calls the router.get("/teams/:teamId/applications", ...)
       const res = await client.get(`/teams/${id}/applications`);
-      return res.data;
+      return Array.isArray(res.data) ? res.data : [];
     },
-    enabled: !!id,
+    enabled: !!id && (isLeader || isHR),
+  });
+
+  const hasApplied = applications && applications.length > 0
+    ? applications.some((app: any) => app.studentId === userID)
+    : false;
+
+  const acceptAppMutation = useMutation({
+    mutationFn: async (studentId: number) => {
+      return await client.post(`/teams/${id}/applications/${studentId}/accept`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teamApps", id] });
+      queryClient.invalidateQueries({ queryKey: ["teamMembers", id] });
+      setSnackbar({ open: true, message: "Application accepted", severity: "success" });
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || "Failed to accept application",
+        severity: "error",
+      });
+    },
+  });
+
+  const rejectAppMutation = useMutation({
+    mutationFn: async (studentId: number) => {
+      return await client.post(`/teams/${id}/applications/${studentId}/reject`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teamApps", id] });
+      setSnackbar({ open: true, message: "Application rejected", severity: "success" });
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || "Failed to reject application",
+        severity: "error",
+      });
+    },
   });
   const addCommentMutation = useMutation({
     mutationFn: async ({
@@ -468,8 +511,26 @@ export default function TeamDetails() {
     setJoinDialogOpen(true);
   };
 
+  const leaveTeamMutation = useMutation({
+    mutationFn: async () => {
+      return await client.delete(`/teams/${id}/leave`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teamDetail", id] });
+      queryClient.invalidateQueries({ queryKey: ["teamMembers", id] });
+      setSnackbar({ open: true, message: "Left team successfully", severity: "success" });
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.error || "Failed to leave team",
+        severity: "error",
+      });
+    },
+  });
+
   const handleLeaveAction = () => {
-    prompt("Action: Leave Team");
+    leaveTeamMutation.mutate();
   };
   const subscribeMutation = useMutation({
     mutationFn: async () => {
@@ -558,7 +619,7 @@ export default function TeamDetails() {
   //   conditionalTabs.push({ label: "Pending Posts", id: "pendingPosts" });
   // }
   if (isHR || isLeader) {
-    conditionalTabs.push({ label: "Join Requests", id: "joinRequests" });
+    conditionalTabs.push({ label: "Pending Applications", id: "joinRequests" });
   }
   if (isMediaTeam || isLeader) {
     conditionalTabs.push({ label: "Reported Posts", id: "reportedPosts" });
@@ -707,7 +768,7 @@ export default function TeamDetails() {
           </Button>
         )}
         {/* Button: Apply to Join (If NOT a member) */}
-        {!isMember && (
+        {!isMember && !hasApplied && (
           <Button
             sx={{ ml: "auto" }}
             variant="outlined"
@@ -718,6 +779,7 @@ export default function TeamDetails() {
             Apply For a Role
           </Button>
         )}
+
         {/* Button: Leave Team (If IS a member AND NOT the leader) */}
         {isMember && !isLeader && (
           <Button
@@ -1067,19 +1129,83 @@ export default function TeamDetails() {
       {/* Conditional Tab: Join Requests (HR Team/Leader Only) */}
       {(isHR || isLeader) && (
         <TabPanel value={tabValue} index={tabIndexMap["joinRequests"]}>
-          <Typography
-            variant="h5"
-            sx={{ display: "flex", alignItems: "center", gap: 1 }}
-          >
-            <MailOutline /> Join Requests
+          <Typography variant="h5" sx={{ mb: 2 }}>
+            Pending Applications
           </Typography>
 
-          <Paper sx={{ p: 3, mt: 2 }}>
-            <Typography color="text.secondary">
-              Only visible to the HR Team and Leader. Here you will manage
-              applications to join the team.
-            </Typography>
-          </Paper>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                  <TableCell sx={{ fontWeight: "bold" }}>Applicant Name</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>Required Role</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>CV</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: "bold" }}>Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {isAppsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                      <CircularProgress size={24} />
+                    </TableCell>
+                  </TableRow>
+                ) : (applications || []).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                      <Typography color="text.secondary">No pending applications.</Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  (applications || []).map((app: any) => (
+                    <TableRow key={app.studentId}>
+                      <TableCell>{`${app.fname} ${app.lname}`}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={app.role}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          href={app.cvUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          View CV
+                        </Button>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Button
+                            variant="contained"
+                            color="success"
+                            size="small"
+                            onClick={() => acceptAppMutation.mutate(app.studentId)}
+                            disabled={acceptAppMutation.isPending || rejectAppMutation.isPending}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            color="error"
+                            size="small"
+                            onClick={() => rejectAppMutation.mutate(app.studentId)}
+                            disabled={acceptAppMutation.isPending || rejectAppMutation.isPending}
+                          >
+                            Reject
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </TabPanel>
       )}
 
@@ -1131,13 +1257,7 @@ export default function TeamDetails() {
                           size="small"
                           disabled={deletePostMutation.isPending}
                           onClick={() => {
-                            if (
-                              window.confirm(
-                                "Are you sure you want to remove this post?"
-                              )
-                            ) {
-                              deletePostMutation.mutate(report.post_id);
-                            }
+                            deletePostMutation.mutate(report.post_id);
                           }}
                         >
                           Remove
