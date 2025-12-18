@@ -947,16 +947,7 @@ export default function TeamDetails() {
         >
           <Typography variant="h5">Team Events</Typography>
           {/* Create Event Button (Leader or Organizer Only) */}
-          {(isLeader || isOrganizer) && (
-            <Button
-              variant="contained"
-              color="secondary"
-              startIcon={<EventIcon />}
-              onClick={handleCreateEvent}
-            >
-              Create Event
-            </Button>
-          )}
+          
         </Stack>
 
         <EventsList teamID={team.id} />
