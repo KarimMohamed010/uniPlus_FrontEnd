@@ -41,6 +41,7 @@ export type FeedPost = {
   author: { id: number; fname: string; lname: string; imgUrl?: string };
   team: { id: number; name: string };
   media: Array<{ id: number; url: string; type: string; description?: string }>;
+  commentCount: number;
 };
 
 interface CommentAuthor {
@@ -350,6 +351,11 @@ function FeedPostCard({
     return roots;
   }, [commentsQuery.data]);
 
+  // Calculate comment count
+  const postComments = commentsQuery.data || [];
+  // const commentsCountToShow =
+  //   typeof post.commentCount === "number" ? post.commentCount : postComments.length;
+
   const renderNestedComment = (node: CommentNode, level: number) => (
     <Box key={node.id} sx={{ ml: level > 0 ? 3 : 0, mt: 2 }}>
       <Paper
@@ -531,7 +537,7 @@ function FeedPostCard({
         <Button size="small" onClick={onToggle} sx={{ mt: 2 }}>
           {isOpen
             ? "Hide comments"
-            : `Show comments (${commentsQuery.data?.length || 0})`}
+            : `Show comments `}
         </Button>
 
         {isOpen && (

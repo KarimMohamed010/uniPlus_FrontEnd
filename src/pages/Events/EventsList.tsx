@@ -403,7 +403,7 @@ const createEventMutation = useMutation({
             } else if (error.response?.status === 404) {
                 alert('Registration not found');
             } else if (error.response?.status === 400) {
-                alert('Cannot cancel registration');
+                alert('Cannot cancel registration after check-in');
             } else {
                 alert('Cancellation failed. Please try again.');
             }
@@ -541,7 +541,7 @@ const handleCreateEvent = () => {
 
                                     </Box>
                                     {/**Here where I should put the price */}
-                                    <EventPrice basePrice={event.basePrice} eventID={event.id} />
+                                    <EventPrice basePrice={event.basePrice} eventID={event.id} teamId={event.team.id} />
                                     <Divider sx={{ marginBottom: '15px' }} />
 
                                     <Accordion sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
@@ -913,7 +913,7 @@ function RateEvent({ eventId }: { eventId: number }) {
     );
 }
 
-function EventPrice({ eventID, basePrice = 100 }: { basePrice?: number, eventID?: number }) {
+function EventPrice({ eventID, basePrice = 100, teamId }: { basePrice?: number, eventID?: number, teamId?: number }) {
     const { user } = useAuth();
     const userId = user?.id;
 
@@ -930,7 +930,7 @@ function EventPrice({ eventID, basePrice = 100 }: { basePrice?: number, eventID?
         enabled: !!eventID && !!userId,
     });
 
-    const currentPrice = useDiscountedPrice(basePrice);
+    const currentPrice = useDiscountedPrice(basePrice, teamId);
 
     return (
         <div>
@@ -965,23 +965,35 @@ function EventPrice({ eventID, basePrice = 100 }: { basePrice?: number, eventID?
 }
 
 // Custom hook to compute discounted price safely with React hooks
-function useDiscountedPrice(basePrice: number = 100) {
+function useDiscountedPrice(basePrice: number = 100, teamId?: number) {
     const { user } = useAuth();
     const userId = user?.id;
+    
+    // Fetch only current user's badges (more secure and efficient)
     const { data: badgesData } = useQuery({
-        queryKey: ['badges'],
+        queryKey: ['my-badges', userId],
         queryFn: async () => {
-            const res = await client.get('/teams/badges');
-            return res.data.students;
-        }
+            const res = await client.get('/tickets/badges');
+            return res.data.badges;
+        },
+        enabled: !!userId
     });
+    
     const getPrice = () => {
         if (!badgesData || !userId) return basePrice;
-        const userBadge = badgesData.find((badge: any) => badge.studentId === userId);
+        
+        // Find badge for the specific team (team-specific discount)
+        const userBadge = badgesData.find((badge: any) => 
+            badge.userId === userId && badge.teamId === teamId
+        );
+        
         if (!userBadge) return basePrice;
-        if (!userBadge.badgeType) return basePrice;
+        if (!userBadge.type) return basePrice;
         if (!userBadge.usageNum || userBadge.usageNum === 0) return basePrice;
-        switch (String(userBadge.badgeType).toLowerCase()) {
+        
+        const badgeType = String(userBadge.type).toLowerCase();
+        
+        switch (badgeType) {
             case 'rising star':
                 return basePrice * 0.9;
             case 'old star':
