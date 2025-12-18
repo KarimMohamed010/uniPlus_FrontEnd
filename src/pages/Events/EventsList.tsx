@@ -7,10 +7,19 @@ import {
     CardActions,
     Button,
     CircularProgress,
-    Grid
+    Grid,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Select,
+    MenuItem,
+    InputLabel,
+    FormControl,
+    FormHelperText
 } from '@mui/material';
 import ShowQRButton from '../../components/ShowQRButton';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import client from '../../api/client';
 import { format } from 'date-fns';
 import Avatar from '@mui/material/Avatar';
@@ -144,6 +153,20 @@ export default function EventsList({ teamID = -1 }: { teamID?: number }) {
     const [registeredEvents, setRegisteredEvents] = useState<Record<number, boolean>>({});
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
+    // --- ADDED: State for Create Event Modal ---
+    const [openCreate, setOpenCreate] = useState(false);
+    const [newEventData, setNewEventData] = useState({
+        title: '',
+        description: '',
+        startTime: '',
+        endTime: '',
+        type: 'offline',
+        basePrice: 0,
+        speakerId: '',
+        speakerId2: '',
+        roomId: '' // Added roomName since backend doesn't return ID
+    });
+    // -------------------------------------------
 
     const queryClient = useQueryClient();
 
@@ -163,6 +186,125 @@ export default function EventsList({ teamID = -1 }: { teamID?: number }) {
             }
         }
     });
+
+    // --- ADDED: Fetch Rooms for Dropdown ---
+    const { data: rooms = [] } = useQuery({
+        queryKey: ['rooms'],
+        queryFn: async () => {
+            // Assuming the router is mounted at /events/rooms based on context
+            // If it's just /rooms, remove the /events prefix
+            const res = await client.get('/events/rooms'); 
+            return res.data.rooms; 
+        },
+        enabled: openCreate // Only fetch when modal is open
+    });
+    // --------------------------------------
+    const { data: speakers = [] } = useQuery({
+        queryKey: ['speakers'],
+        queryFn: async () => {
+            const res = await client.get('/events/speakers'); 
+            return res.data.speakers; 
+        },
+        enabled: openCreate // Only fetch when modal is open
+    });
+    // --------------------------------------
+    // --- ADDED: Permission Check for Create Button ---
+    const { data: permissions } = useQuery({
+        queryKey: ['create-permissions', teamID, user?.id],
+        queryFn: async () => {
+            if (teamID === -1 || !user?.id) return { canCreate: false };
+            try {
+                // 1. Get Team Info for Leader
+                const teamRes = await client.get(`/teams/${teamID}`);
+                const leaderId = teamRes.data?.team?.leaderId;
+                
+                // 2. Get Members Info for Role
+                const membersRes = await client.get(`/teams/${teamID}/members`);
+                const members = membersRes.data?.members || [];
+                const myMember = members.find((m: any) => m.studentId === user.id);
+
+                const isLeader = leaderId === user.id;
+                const isOrganizer = myMember?.role === 'organizer';
+
+                return { canCreate: isLeader || isOrganizer };
+            } catch (e) {
+                return { canCreate: false };
+            }
+        },
+        enabled: teamID !== -1 && !!user?.id
+    });
+    // -----------------------------------------------
+
+    // --- ADDED: Mutation to Create Event ---
+    
+const createEventMutation = useMutation({
+    mutationFn: async (data: any) => {
+        console.log('1. Raw data received in mutation:', data); // DEBUG
+        
+        // Build clean payload with proper types
+        const payload: any = {
+            title: data.title,
+            description: data.description || '',
+            startTime: data.startTime,
+            endTime: data.endTime,
+            type: data.type,
+            basePrice: Number(data.basePrice) || 0,
+            teamId: teamID,
+            speakerId: Number(data.speakerId)
+        };
+        
+        console.log('2. Base payload:', payload); // DEBUG
+        
+        // Only add optional fields if they have actual valid values
+        if (data.speakerId2 && data.speakerId2 !== '' && data.speakerId2 !== '0') {
+            const speaker2 = Number(data.speakerId2);
+            console.log('3. Processing speaker2:', data.speakerId2, '-> number:', speaker2); // DEBUG
+            if (speaker2 > 0) {
+                payload.speakerId2 = speaker2;
+            }
+        }
+        
+        // Process roomId
+        if (data.roomId && data.roomId !== '' && data.roomId !== '0') {
+            const room = Number(data.roomId);
+            console.log('4. Processing roomId:', data.roomId, '-> number:', room); // DEBUG
+            if (room > 0) {
+                payload.roomId = room;
+                console.log('5. roomId ADDED to payload'); // DEBUG
+            } else {
+                console.log('5. roomId NOT added (not > 0)'); // DEBUG
+            }
+        } else {
+            console.log('4. roomId skipped - value:', data.roomId); // DEBUG
+        }
+        
+        console.log('6. Final payload being sent:', payload); // DEBUG
+        return await client.post('/events', payload);
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['events'] });
+        setOpenCreate(false);
+        setNewEventData({ 
+            title: '', 
+            description: '', 
+            startTime: '', 
+            endTime: '', 
+            type: 'offline', 
+            basePrice: 0, 
+            speakerId: '',
+            speakerId2: '',
+            roomId: ''
+        });
+        showSnackbar('Event created successfully', 'success');
+    },
+    onError: (error: any) => {
+        console.error('Full error object:', error);
+        console.error('Response data:', error.response?.data);
+        console.error('Validation details:', error.response?.data?.details);
+        alert(error.response?.data?.message || error.response?.data?.error || 'Failed to create event');
+    }
+});
+    // ---------------------------------------
 
     interface RegisteredEvent {
         eventId: number;
@@ -223,9 +365,9 @@ export default function EventsList({ teamID = -1 }: { teamID?: number }) {
                 [eventId]: true
             }));
 
-            // Show success message
+            
             showSnackbar('Successfully registered for the event!', 'success');
-            // You could add a toast/snackbar here
+            
 
         } catch (error: any) {
             console.error('Registration failed:', error);
@@ -243,7 +385,7 @@ export default function EventsList({ teamID = -1 }: { teamID?: number }) {
 
     const handleCancel = async (eventId: number) => {
         try {
-            // Call the cancel registration API
+            
             const response = await client.delete(`/events/${eventId}/cancel`);
 
             // Update local state
@@ -296,8 +438,7 @@ export default function EventsList({ teamID = -1 }: { teamID?: number }) {
         setDeletingId(eventId);
         try {
             await client.delete(`/events/${eventId}`);
-            // 3. THIS IS THE MAGICAL PART (Instant Update)
-            // It manually filters the event out of the list so it vanishes instantly
+            
             queryClient.setQueryData(['events'], (oldEvents: Event[] | undefined) => {
                 return oldEvents ? oldEvents.filter(e => e.id !== eventId) : [];
             });
@@ -311,12 +452,45 @@ export default function EventsList({ teamID = -1 }: { teamID?: number }) {
         }
     };
 
+    
+const handleCreateEvent = () => {
+    // 1. Validate Required Fields
+    if (!newEventData.title.trim()) return alert("Title is required");
+    if (!newEventData.startTime) return alert("Start Time is required");
+    if (!newEventData.endTime) return alert("End Time is required");
+    if (!newEventData.speakerId || newEventData.speakerId === '') return alert("Main Speaker is required");
+    
+    // 2. Validate Price
+    if (newEventData.basePrice < 0) return alert("Price must be a positive number");
+    
+    // 3. Validate Room for Offline Events - FIX THIS CHECK
+    if (newEventData.type === 'offline' && (!newEventData.roomId || newEventData.roomId === '' || newEventData.roomId === '0')) {
+        return alert("Room is required for offline events");
+    }
+    
+    // 4. Debug log before submitting
+    console.log('Submitting event data:', newEventData);
+    
+    // 5. Submit
+    createEventMutation.mutate(newEventData);
+};
+
     return (
         <Box>
             {teamID == -1 && <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h4">Events</Typography>
 
             </Box>}
+
+            {/* --- ADDED: Create Event Button Section --- */}
+            {teamID !== -1 && permissions?.canCreate && (
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                    <Button variant="contained" onClick={() => setOpenCreate(true)}>
+                        Create Event
+                    </Button>
+                </Box>
+            )}
+            {/* ----------------------------------------- */}
 
             <Grid container spacing={3} >
                 {events?.map((event) => {
@@ -428,6 +602,129 @@ export default function EventsList({ teamID = -1 }: { teamID?: number }) {
                     </Typography>
                 )}
             </Grid>
+
+            {/* --- ADDED: Create Event Dialog --- */}
+            <Dialog open={openCreate} onClose={() => setOpenCreate(false)} fullWidth maxWidth="sm">
+                <DialogTitle>Create New Event</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+                        <TextField
+                            label="Title"
+                            fullWidth
+                            value={newEventData.title}
+                            onChange={(e) => setNewEventData({ ...newEventData, title: e.target.value })}
+                        />
+                        <TextField
+                            label="Description"
+                            fullWidth
+                            multiline
+                            rows={3}
+                            value={newEventData.description}
+                            onChange={(e) => setNewEventData({ ...newEventData, description: e.target.value })}
+                        />
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                            <TextField
+                                label="Start Time"
+                                type="datetime-local"
+                                fullWidth
+                                InputLabelProps={{ shrink: true }}
+                                value={newEventData.startTime}
+                                onChange={(e) => setNewEventData({ ...newEventData, startTime: e.target.value })}
+                            />
+                            <TextField
+                                label="End Time"
+                                type="datetime-local"
+                                fullWidth
+                                InputLabelProps={{ shrink: true }}
+                                value={newEventData.endTime}
+                                onChange={(e) => setNewEventData({ ...newEventData, endTime: e.target.value })}
+                            />
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                            <FormControl fullWidth>
+                                <InputLabel>Type</InputLabel>
+                                <Select
+                                    value={newEventData.type}
+                                    label="Type"
+                                    onChange={(e) => setNewEventData({ ...newEventData, type: e.target.value })}
+                                >
+                                    <MenuItem value="offline">Offline</MenuItem>
+                                    <MenuItem value="online">Online</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <TextField
+                                label="Price"
+                                type="number"
+                                fullWidth
+                                value={newEventData.basePrice}
+                                onChange={(e) => setNewEventData({ ...newEventData, basePrice: Number(e.target.value) })}
+                            />
+                        </Box>
+                        
+                        
+                        <FormControl fullWidth>
+                            <InputLabel>Speaker</InputLabel>
+                            <Select
+                                value={newEventData.speakerId}
+                                label="Speaker"
+                                onChange={(e) => setNewEventData({ ...newEventData, speakerId: e.target.value })}
+                            >
+                                <MenuItem value=""><em>None</em></MenuItem>
+                                {speakers.map((speaker: any, index: number) => (
+                                    <MenuItem key={index} value={speaker.id}>
+                                        {speaker.name}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                            {speakers.length === 0 && <FormHelperText>Loading speakers...</FormHelperText>}
+                        </FormControl>
+                        {newEventData.type == 'offline' && <FormControl fullWidth>
+                            <InputLabel>Room</InputLabel>
+                            <Select
+                                value={String(newEventData.roomId)} // <--- MUST match state variable
+                                label="Room"
+                                onChange={(e) => setNewEventData({ ...newEventData, roomId: e.target.value })} // <--- Updates roomId
+                            >
+                                <MenuItem value=""><em>None</em></MenuItem>
+                                {rooms.map((room: any) => (
+                                    <MenuItem key={room.id} value={String(room.id)}> {/* <--- Sends ID, not Name */}
+                                        {room.name} ({room.location} - Cap: {room.capacity})
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>}
+
+                        {/* SPEAKER 2 SELECT BLOCK */}
+                        <FormControl fullWidth sx={{ mt: 2 }}>
+                            <InputLabel>Speaker 2 (Optional)</InputLabel>
+                            <Select
+                                value={newEventData.speakerId2}
+                                label="Speaker 2 (Optional)"
+                                onChange={(e) => setNewEventData({ 
+                                    ...newEventData, 
+                                    speakerId2: e.target.value ? Number(e.target.value) : undefined // Convert to number or undefined
+                                })}
+                            >
+                                <MenuItem value=""><em>None</em></MenuItem>
+                                {speakers.map((speaker: any) => (
+                                    <MenuItem key={speaker.id} value={speaker.id}>
+                                        {speaker.name}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                        {/* ---------------------------------------- */}
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenCreate(false)}>Cancel</Button>
+                    {/* Update onClick to use the validation function */}
+                    <Button variant="contained" onClick={handleCreateEvent}>
+                        Create
+                    </Button>
+                </DialogActions>
+            </Dialog>
+            {/* ---------------------------------- */}
 
 
             <Snackbar
@@ -666,8 +963,6 @@ function EventPrice({ eventID, basePrice = 100 }: { basePrice?: number, eventID?
         </div>
     );
 }
-
-
 
 // Custom hook to compute discounted price safely with React hooks
 function useDiscountedPrice(basePrice: number = 100) {

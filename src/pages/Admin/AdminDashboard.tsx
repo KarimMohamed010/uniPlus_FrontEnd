@@ -202,11 +202,76 @@ export default function AdminDashboard() {
       location: string | null;
     }>
   >([]);
+  //Speakers state
+  const [speakerssList, setSpeakersList] = useState<
+    Array<{
+      id: number;
+      name: string;
+      fname: string;
+      lname: string;
+      bio: string | null;
+      email: string;
+      contact: number;
+    }>
+  >([]);
   const [addRoomDialogOpen, setAddRoomDialogOpen] = useState(false);
   const [roomName, setRoomName] = useState("");
   const [roomCapacity, setRoomCapacity] = useState<number>(0);
   const [roomLocation, setRoomLocation] = useState("");
-
+    // add speaker state
+    // Add Speaker Dialog State
+const [addSpeakerDialogOpen, setAddSpeakerDialogOpen] = useState(false);
+const [speakerName, setSpeakerName] = useState("");
+const [speakerEmail, setSpeakerEmail] = useState("");
+const [speakerBio, setSpeakerBio] = useState("");
+const [speakerFname, setSpeakerFname] = useState("");
+const [speakerLname, setSpeakerLname] = useState("");
+const [speakerContact, setSpeakerContact] = useState<number | "">("");
+// handle add
+// Add Speaker Handler
+const handleAddSpeaker = async () => {
+  try {
+    if (!speakerName || !speakerEmail) {
+      setError("Speaker name and email are required");
+      return;
+    }
+    
+    setIsLoading(true);
+    setError("");
+    
+    await client.post("/admin/speakers", {
+      name: speakerName,
+      email: speakerEmail,
+      bio: speakerBio || undefined,
+      fname: speakerFname || undefined,
+      lname: speakerLname || undefined,
+      contact: speakerContact || undefined,
+    });
+    
+    setSuccessMessage("Speaker added successfully!");
+    setAddSpeakerDialogOpen(false);
+    
+    // Clear form fields
+    setSpeakerName("");
+    setSpeakerEmail("");
+    setSpeakerBio("");
+    setSpeakerFname("");
+    setSpeakerLname("");
+    setSpeakerContact("");
+    
+    fetchSpeakers();
+    setTimeout(() => setSuccessMessage(""), 3000);
+  } catch (err) {
+    console.error("Failed to add speaker:", err);
+    if (err instanceof AxiosError && err.response) {
+      setError(err.response.data.error || "Failed to add speaker");
+    } else {
+      setError("Failed to add speaker");
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
   // Fetch Admins
   const fetchAdmins = async () => {
     try {
@@ -229,6 +294,19 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error("Failed to fetch rooms:", error);
       setError("Failed to fetch rooms");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  // fetch speakers
+  const fetchSpeakers = async () => {
+    try {
+      setIsLoading(true);
+      const response = await client.get("/events/speakers");
+      setSpeakersList(response.data.speakers || response.data || []);
+    } catch (error) {
+      console.error("Failed to fetch speakers:", error);
+      setError("Failed to fetch speakers");
     } finally {
       setIsLoading(false);
     }
@@ -282,6 +360,34 @@ export default function AdminDashboard() {
       setIsLoading(false);
     }
   };
+  // Handle Speaker deletion
+  const handleSpeakerRemove = async (id : number) => {
+    try {
+      setIsLoading(true);
+      const response = await client.delete(`admin/speakers/${id}`);
+      setSuccessMessage("speaker removed successfully!");
+      fetchSpeakers();
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch speaker:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  // Handle room deletion
+  const handleRoomRemove = async (id : number) => {
+    try {
+      setIsLoading(true);
+      const response = await client.delete(`admin/rooms/${id}`);
+      setSuccessMessage("Room removed successfully!");
+      fetchRooms();
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch Room:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Handlers for Event/Organization Approval
   const fetchPendingApprovals = async () => {
@@ -305,6 +411,7 @@ export default function AdminDashboard() {
       fetchPendingApprovals();
     } else if (tabValue === 4) {
       fetchRooms();
+      fetchSpeakers();
     }
   }, [tabValue]);
 
@@ -487,7 +594,7 @@ export default function AdminDashboard() {
             <Tab label="Add Admin" id="admin-tab-1" />
             <Tab label="Reports" id="admin-tab-2" />
             <Tab label="Managerial Reports" id="admin-tab-3" />
-            <Tab label="Rooms" id="admin-tab-4" />
+            <Tab label="Rooms/Speakers" id="admin-tab-4" />
           </Tabs>
 
           {/* TAB 0: Event/Organization Approvals */}
@@ -1178,13 +1285,13 @@ export default function AdminDashboard() {
                           <TableCell>{admin.username}</TableCell>
                           <TableCell>{admin.email}</TableCell>
                           <TableCell>
-                            <Button
+                            { admin.id != user.id&&<Button
                               size="small"
                               color="error"
                               onClick={() => handleRemove(admin.id)}
                             >
                               Remove
-                            </Button>
+                            </Button>}
                           </TableCell>
                         </TableRow>
                       ))
@@ -1655,6 +1762,7 @@ export default function AdminDashboard() {
                       <TableCell>Name</TableCell>
                       <TableCell>Capacity</TableCell>
                       <TableCell>Location</TableCell>
+                      <TableCell></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1673,6 +1781,15 @@ export default function AdminDashboard() {
                           <TableCell>{room.name}</TableCell>
                           <TableCell>{room.capacity}</TableCell>
                           <TableCell>{room.location || "-"}</TableCell>
+                          <TableCell>
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => handleRoomRemove(room.id)}
+                            >
+                              Remove
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))
                     )}
@@ -1739,6 +1856,145 @@ export default function AdminDashboard() {
                 </DialogActions>
               </Dialog>
             </Box>
+            
+        <Typography variant="h6" sx={{mt:3, mb:3}}>Speakers</Typography>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setAddSpeakerDialogOpen(true)}
+          >
+            Add Speaker
+          </Button>
+        </Box>
+        <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                      
+                      <TableCell>Name</TableCell>
+                      <TableCell>Email</TableCell>
+                      <TableCell>Bio</TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {speakerssList.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} align="center" sx={{ py: 4 }}> {/* Changed from 4 to 8 */}
+                          <Typography color="textSecondary">
+                            No speakers available
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      speakerssList.map((speaker) => (
+                        <TableRow key={speaker.id}>
+                          
+                          
+                          <TableCell>{speaker.name}</TableCell>
+                          <TableCell>{speaker.email}</TableCell>
+                          <TableCell>{speaker.bio || "-"}</TableCell>
+                          <TableCell>
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => handleSpeakerRemove(speaker.id)}
+                            >
+                              Remove
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                </TableBody>
+                </Table>
+              </TableContainer>
+              <Dialog
+  open={addSpeakerDialogOpen}
+  onClose={() => {
+    setAddSpeakerDialogOpen(false);
+    setSpeakerName("");
+    setSpeakerEmail("");
+    setSpeakerBio("");
+    setSpeakerFname("");
+    setSpeakerLname("");
+    setSpeakerContact("");
+  }}
+  maxWidth="sm"
+  fullWidth
+>
+  <DialogTitle>Add New Speaker</DialogTitle>
+  <DialogContent>
+    <Box sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+      <TextField
+        fullWidth
+        label="Speaker Name"
+        value={speakerName}
+        onChange={(e) => setSpeakerName(e.target.value)}
+        required
+      />
+      <TextField
+        fullWidth
+        label="Email"
+        type="email"
+        value={speakerEmail}
+        onChange={(e) => setSpeakerEmail(e.target.value)}
+        required
+      />
+      <TextField
+        fullWidth
+        label="First Name (Optional)"
+        value={speakerFname}
+        onChange={(e) => setSpeakerFname(e.target.value)}
+      />
+      <TextField
+        fullWidth
+        label="Last Name (Optional)"
+        value={speakerLname}
+        onChange={(e) => setSpeakerLname(e.target.value)}
+      />
+      <TextField
+        fullWidth
+        label="Bio (Optional)"
+        multiline
+        rows={3}
+        value={speakerBio}
+        onChange={(e) => setSpeakerBio(e.target.value)}
+      />
+      <TextField
+        fullWidth
+        label="Contact Number (Optional)"
+        type="number"
+        value={speakerContact}
+        onChange={(e) => setSpeakerContact(e.target.value ? parseInt(e.target.value) : "")}
+      />
+    </Box>
+  </DialogContent>
+  <DialogActions>
+    <Button
+      onClick={() => {
+        setAddSpeakerDialogOpen(false);
+        setSpeakerName("");
+        setSpeakerEmail("");
+        setSpeakerBio("");
+        setSpeakerFname("");
+        setSpeakerLname("");
+        setSpeakerContact("");
+      }}
+      disabled={isLoading}
+    >
+      Cancel
+    </Button>
+    <Button
+      variant="contained"
+      onClick={handleAddSpeaker}
+      disabled={isLoading}
+    >
+      {isLoading ? <CircularProgress size={20} /> : "Add Speaker"}
+    </Button>
+  </DialogActions>
+</Dialog>
           </TabPanel>
         </CardContent>
       </Card>
