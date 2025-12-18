@@ -17,6 +17,7 @@ import {
 import client from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import {  AxiosError } from "axios";
+import Snowfall from 'react-snowfall'
 
 const schema = z.object({
   fname: z.string().min(1, "First name is required"),
@@ -80,6 +81,7 @@ export default function Register() {
         p: 2,
       }}
     >
+      <Snowfall />
       <Container maxWidth="sm">
         <Paper
           elevation={10}
