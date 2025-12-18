@@ -169,6 +169,16 @@ export default function TeamDetails() {
   const [cvUrl, setCvUrl] = useState("");
   const [joinError, setJoinError] = useState("");
 
+  // Create Event Dialog State
+  const [createEventOpen, setCreateEventOpen] = useState(false);
+  const [eventTitle, setEventTitle] = useState("");
+  const [eventDescription, setEventDescription] = useState("");
+  const [eventType, setEventType] = useState("offline");
+  const [eventStartTime, setEventStartTime] = useState("");
+  const [eventEndTime, setEventEndTime] = useState("");
+  const [eventBasePrice, setEventBasePrice] = useState<number>(0);
+  const [createEventError, setCreateEventError] = useState("");
+
   const [expandedComments, setExpandedComments] = useState<
     Record<number, boolean>
   >({});
@@ -245,8 +255,8 @@ export default function TeamDetails() {
   const isMember = isLeader
     ? true
     : teamMembers && teamMembers.length > 0
-    ? teamMembers.some((member) => member.id === userID)
-    : false; // Filter members into categories
+      ? teamMembers.some((member) => member.id === userID)
+      : false; // Filter members into categories
 
   const isSubscribed = !!mySubscribedTeams?.some(
     (t: any) => t?.id === team?.id
@@ -373,8 +383,44 @@ export default function TeamDetails() {
   //
   //
   const handleCreateEvent = () => {
-    prompt("Action: Open Create Event Form");
+    setCreateEventOpen(true);
   };
+
+  const createEventMutation = useMutation({
+    mutationFn: async () => {
+      setCreateEventError("");
+      if (!eventTitle.trim()) throw new Error("Title is required");
+      if (!eventStartTime) throw new Error("Start time is required");
+      if (!eventEndTime) throw new Error("End time is required");
+
+      return await client.post("/events", {
+        title: eventTitle.trim(),
+        description: eventDescription.trim() || undefined,
+        type: eventType,
+        startTime: new Date(eventStartTime).toISOString(),
+        endTime: new Date(eventEndTime).toISOString(),
+        teamId: Number(id),
+        basePrice: eventBasePrice > 0 ? eventBasePrice : undefined,
+      });
+    },
+    onSuccess: () => {
+      setCreateEventOpen(false);
+      // Reset form
+      setEventTitle("");
+      setEventDescription("");
+      setEventType("offline");
+      setEventStartTime("");
+      setEventEndTime("");
+      setEventBasePrice(0);
+      // Invalidate team events to refresh
+      queryClient.invalidateQueries({ queryKey: ["teamEvents", id] });
+    },
+    onError: (e: any) => {
+      setCreateEventError(
+        e?.response?.data?.error || e?.message || "Failed to create event"
+      );
+    },
+  });
 
   const handleJoinAction = () => {
     setJoinDialogOpen(true);
@@ -567,9 +613,8 @@ export default function TeamDetails() {
               }
             >
               <ListItemText
-                primary={`${member.fname} ${member.lname} ${
-                  isLeaderSection ? "(Team Leader)" : ""
-                }`}
+                primary={`${member.fname} ${member.lname} ${isLeaderSection ? "(Team Leader)" : ""
+                  }`}
                 secondary={member.email}
               />
             </ListItem>
@@ -1194,6 +1239,101 @@ export default function TeamDetails() {
               <CircularProgress size={24} />
             ) : (
               "Submit Application"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create Event Dialog */}
+      <Dialog
+        open={createEventOpen}
+        onClose={() => setCreateEventOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Create New Event</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          {createEventError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {createEventError}
+            </Alert>
+          )}
+
+          <TextField
+            label="Event Title"
+            fullWidth
+            required
+            value={eventTitle}
+            onChange={(e) => setEventTitle(e.target.value)}
+            sx={{ mb: 2, mt: 1 }}
+          />
+
+          <TextField
+            label="Description"
+            fullWidth
+            multiline
+            rows={3}
+            value={eventDescription}
+            onChange={(e) => setEventDescription(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel id="event-type-label">Event Type</InputLabel>
+            <Select
+              labelId="event-type-label"
+              value={eventType}
+              label="Event Type"
+              onChange={(e) => setEventType(e.target.value)}
+            >
+              <MenuItem value="offline">Offline</MenuItem>
+              <MenuItem value="online">Online</MenuItem>
+              <MenuItem value="hybrid">Hybrid</MenuItem>
+            </Select>
+          </FormControl>
+
+          <TextField
+            label="Start Date & Time"
+            type="datetime-local"
+            fullWidth
+            required
+            value={eventStartTime}
+            onChange={(e) => setEventStartTime(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ mb: 2 }}
+          />
+
+          <TextField
+            label="End Date & Time"
+            type="datetime-local"
+            fullWidth
+            required
+            value={eventEndTime}
+            onChange={(e) => setEventEndTime(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ mb: 2 }}
+          />
+
+          <TextField
+            label="Base Price (optional)"
+            type="number"
+            fullWidth
+            value={eventBasePrice}
+            onChange={(e) => setEventBasePrice(Number(e.target.value))}
+            slotProps={{ input: { inputProps: { min: 0 } } }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateEventOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => createEventMutation.mutate()}
+            disabled={createEventMutation.isPending}
+          >
+            {createEventMutation.isPending ? (
+              <CircularProgress size={24} />
+            ) : (
+              "Create Event"
             )}
           </Button>
         </DialogActions>

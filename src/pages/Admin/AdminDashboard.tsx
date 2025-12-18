@@ -24,7 +24,7 @@ import {
   CircularProgress,
   Container,
 } from "@mui/material";
-import { Download } from "@mui/icons-material";
+import { Download, Add } from "@mui/icons-material";
 import { useAuth } from "../../context/AuthContext";
 import client from "../../api/client";
 import { useForm } from "react-hook-form";
@@ -193,6 +193,20 @@ export default function AdminDashboard() {
     }>
   >([]);
 
+  // Rooms State
+  const [roomsList, setRoomsList] = useState<
+    Array<{
+      id: number;
+      name: string;
+      capacity: number;
+      location: string | null;
+    }>
+  >([]);
+  const [addRoomDialogOpen, setAddRoomDialogOpen] = useState(false);
+  const [roomName, setRoomName] = useState("");
+  const [roomCapacity, setRoomCapacity] = useState<number>(0);
+  const [roomLocation, setRoomLocation] = useState("");
+
   // Fetch Admins
   const fetchAdmins = async () => {
     try {
@@ -201,6 +215,53 @@ export default function AdminDashboard() {
       setAdminsList(response.data.admins || []);
     } catch (error) {
       console.error("Failed to fetch admins:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch Rooms
+  const fetchRooms = async () => {
+    try {
+      setIsLoading(true);
+      const response = await client.get("/events/rooms");
+      setRoomsList(response.data.rooms || []);
+    } catch (error) {
+      console.error("Failed to fetch rooms:", error);
+      setError("Failed to fetch rooms");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Add Room Handler
+  const handleAddRoom = async () => {
+    try {
+      if (!roomName || roomCapacity < 1) {
+        setError("Room name and capacity are required");
+        return;
+      }
+      setIsLoading(true);
+      setError("");
+      await client.post("/events/rooms", {
+        name: roomName,
+        capacity: roomCapacity,
+        location: roomLocation || undefined,
+      });
+      setSuccessMessage("Room added successfully!");
+      setAddRoomDialogOpen(false);
+      setRoomName("");
+      setRoomCapacity(0);
+      setRoomLocation("");
+      fetchRooms();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err) {
+      console.error("Failed to add room:", err);
+      if (err instanceof AxiosError && err.response) {
+        setError(err.response.data.error);
+      } else {
+        setError("Failed to add room");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -242,6 +303,8 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (tabValue === 0) {
       fetchPendingApprovals();
+    } else if (tabValue === 4) {
+      fetchRooms();
     }
   }, [tabValue]);
 
@@ -309,16 +372,12 @@ export default function AdminDashboard() {
     }
   };
 
-  // Handlers for Admin Management
-  // These handlers are available for future use in admin management features
-
   // Handlers for Reports
   const handleGenerateReport = async () => {
     try {
       setIsLoading(true);
       setError("");
       
-      // Make API call to get the report data
       const response = await client.get(`/reports/${reportType}`, {
         params: {
           scope: reportScope,
@@ -326,10 +385,8 @@ export default function AdminDashboard() {
         }
       });
       
-      // Transform the API response to match our frontend data structure
       const apiData = response.data.data || [];
       
-      // Format the data for the table
       const formattedData = apiData.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -355,11 +412,9 @@ export default function AdminDashboard() {
 
   const handleDownloadReport = () => {
     try {
-      // Convert report data to CSV
       const headers = [];
-      const dataRows = [];
+      const dataRows: string[] = [];
       
-      // Add headers based on report type
       if (reportType === 'participation') {
         headers.push('Name', 'Participants', 'Attendance Rate (%)', 'Date');
         reportData.forEach(item => {
@@ -383,13 +438,11 @@ export default function AdminDashboard() {
         });
       }
       
-      // Create CSV content
       const csvContent = [
         headers.join(','),
         ...dataRows
       ].join('\n');
       
-      // Create download link
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -407,9 +460,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // Handlers for Announcements
-  // This handler is available for sending system announcements to all users;;
-
   if (user?.roles.global !== "admin") {
     return (
       <Box sx={{ p: 3 }}>
@@ -422,12 +472,6 @@ export default function AdminDashboard() {
 
   return (
     <Box sx={{ width: "100%" }}>
-      {/* {successMessage && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {successMessage}
-        </Alert>
-      )} */}
-
       <Card>
         <CardContent>
           <Typography variant="h4" sx={{ mb: 3 }}>
@@ -443,6 +487,7 @@ export default function AdminDashboard() {
             <Tab label="Add Admin" id="admin-tab-1" />
             <Tab label="Reports" id="admin-tab-2" />
             <Tab label="Managerial Reports" id="admin-tab-3" />
+            <Tab label="Rooms" id="admin-tab-4" />
           </Tabs>
 
           {/* TAB 0: Event/Organization Approvals */}
@@ -793,8 +838,7 @@ export default function AdminDashboard() {
                                     </TableRow>
                                   ) : (
                                     approvalItemDetails.registrations.map((r: any) => (
-                                      <TableRow key={`${r.studentId}-${r.dateIssued}`}
-                                        >
+                                      <TableRow key={`${r.studentId}-${r.dateIssued}`}>
                                         <TableCell>{r.studentName || r.studentId}</TableCell>
                                         <TableCell>{r.email || "-"}</TableCell>
                                         <TableCell>{r.price ?? "-"}</TableCell>
@@ -965,9 +1009,6 @@ export default function AdminDashboard() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  // background:
-                  //   "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  // p: 2,
                 }}
               >
                 <Container maxWidth="sm">
@@ -1051,7 +1092,6 @@ export default function AdminDashboard() {
                           />
                         </Grid>
 
-                        {/* NEW USERNAME FIELD */}
                         <Grid key="username" size={{ xs: 12 }}>
                           <TextField
                             fullWidth
@@ -1141,7 +1181,7 @@ export default function AdminDashboard() {
                             <Button
                               size="small"
                               color="error"
-                              onClick={()=>handleRemove(admin.id )}
+                              onClick={() => handleRemove(admin.id)}
                             >
                               Remove
                             </Button>
@@ -1181,7 +1221,7 @@ export default function AdminDashboard() {
                     <option value="engagement">Engagement Report</option>
                   </TextField>
                 </Grid>
-                
+
                 <Grid key="reportScope" item xs={12} sm={6} md={3}>
                   <TextField
                     select
@@ -1200,7 +1240,7 @@ export default function AdminDashboard() {
                     <option value="team">By Team</option>
                   </TextField>
                 </Grid>
-                
+
                 <Grid key="timeRange" item xs={12} sm={6} md={3}>
                   <TextField
                     select
@@ -1221,7 +1261,7 @@ export default function AdminDashboard() {
                     <option value="all">All Time</option>
                   </TextField>
                 </Grid>
-                
+
                 <Grid key="generateBtn" item xs={12} sm={6} md={3} sx={{ display: 'flex', alignItems: 'flex-end' }}>
                   <Button
                     fullWidth
@@ -1243,9 +1283,9 @@ export default function AdminDashboard() {
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                     <Typography variant="subtitle1">
-                      Showing {reportScope === 'event' ? 'Events' : 'Teams'} for {timeRange === 'week' ? 'Last 7 Days' : 
-                      timeRange === 'month' ? 'This Month' : 
-                      timeRange === 'year' ? 'This Year' : 'All Time'}
+                      Showing {reportScope === 'event' ? 'Events' : 'Teams'} for {timeRange === 'week' ? 'Last 7 Days' :
+                        timeRange === 'month' ? 'This Month' :
+                          timeRange === 'year' ? 'This Year' : 'All Time'}
                     </Typography>
                     <Button
                       variant="outlined"
@@ -1256,7 +1296,7 @@ export default function AdminDashboard() {
                       Download CSV
                     </Button>
                   </Box>
-                  
+
                   <TableContainer component={Paper}>
                     <Table>
                       <TableHead>
@@ -1284,7 +1324,7 @@ export default function AdminDashboard() {
                                 <TableCell align="right">
                                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                     <Box sx={{ width: '100%', maxWidth: '100px', mr: 1 }}>
-                                      <Box 
+                                      <Box
                                         sx={{
                                           height: '8px',
                                           backgroundColor: '#e0e0e0',
@@ -1292,12 +1332,12 @@ export default function AdminDashboard() {
                                           overflow: 'hidden'
                                         }}
                                       >
-                                        <Box 
+                                        <Box
                                           sx={{
                                             height: '100%',
                                             width: `${item.attendanceRate}%`,
-                                            backgroundColor: item.attendanceRate >= 80 ? '#4caf50' : 
-                                                          item.attendanceRate >= 60 ? '#ff9800' : '#f44336',
+                                            backgroundColor: (item.attendanceRate ?? 0) >= 80 ? '#4caf50' :
+                                              (item.attendanceRate ?? 0) >= 60 ? '#ff9800' : '#f44336',
                                             transition: 'width 0.3s ease'
                                           }}
                                         />
@@ -1311,7 +1351,7 @@ export default function AdminDashboard() {
                                   <TableCell align="right">
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                       <Box sx={{ mr: 1 }}>{item.engagementScore?.toFixed(1)}</Box>
-                                      <Box 
+                                      <Box
                                         sx={{
                                           width: '60px',
                                           height: '8px',
@@ -1320,12 +1360,12 @@ export default function AdminDashboard() {
                                           overflow: 'hidden'
                                         }}
                                       >
-                                        <Box 
+                                        <Box
                                           sx={{
                                             height: '100%',
                                             width: `${(item.engagementScore || 0) * 20}%`,
-                                            backgroundColor: (item.engagementScore || 0) >= 4 ? '#4caf50' : 
-                                                          (item.engagementScore || 0) >= 3 ? '#ff9800' : '#f44336',
+                                            backgroundColor: (item.engagementScore || 0) >= 4 ? '#4caf50' :
+                                              (item.engagementScore || 0) >= 3 ? '#ff9800' : '#f44336',
                                             transition: 'width 0.3s ease'
                                           }}
                                         />
@@ -1352,11 +1392,11 @@ export default function AdminDashboard() {
                       </TableBody>
                     </Table>
                   </TableContainer>
-                  
+
                   {reportData.length > 0 && (
                     <Box sx={{ mt: 3, textAlign: 'center' }}>
                       <Typography variant="body2" color="textSecondary">
-                        Showing {reportData.length} {reportScope === 'event' ? 'events' : 'teams'} • 
+                        Showing {reportData.length} {reportScope === 'event' ? 'events' : 'teams'} •
                         Generated on {new Date().toLocaleString()}
                       </Typography>
                     </Box>
@@ -1366,6 +1406,7 @@ export default function AdminDashboard() {
             </Box>
           </TabPanel>
 
+          {/* TAB 3: Managerial Reports */}
           <TabPanel value={tabValue} index={3}>
             <Box>
               <Typography variant="h6" sx={{ mb: 3 }}>
@@ -1560,6 +1601,143 @@ export default function AdminDashboard() {
                   </Grid>
                 </Grid>
               )}
+            </Box>
+          </TabPanel>
+
+          {/* TAB 4: Rooms */}
+                    {/* TAB 4: Rooms */}
+          <TabPanel value={tabValue} index={4}>
+            <Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 3,
+                }}
+              >
+                <Typography variant="h6">Room Management</Typography>
+                <Box>
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => setAddRoomDialogOpen(true)}
+                    sx={{ mr: 1 }}
+                  >
+                    Add Room
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={fetchRooms}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? <CircularProgress size={20} /> : "Refresh"}
+                  </Button>
+                </Box>
+              </Box>
+
+              {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
+              {successMessage && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  {successMessage}
+                </Alert>
+              )}
+
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                      <TableCell></TableCell>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Capacity</TableCell>
+                      <TableCell>Location</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {roomsList.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                          <Typography color="textSecondary">
+                            No rooms available
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      roomsList.map((room) => (
+                        <TableRow key={room.id}>
+                          <TableCell>{room.id}</TableCell>
+                          <TableCell>{room.name}</TableCell>
+                          <TableCell>{room.capacity}</TableCell>
+                          <TableCell>{room.location || "-"}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <Dialog
+                open={addRoomDialogOpen}
+                onClose={() => {
+                  setAddRoomDialogOpen(false);
+                  setRoomName("");
+                  setRoomCapacity(0);
+                  setRoomLocation("");
+                }}
+                maxWidth="sm"
+                fullWidth
+              >
+                <DialogTitle>Add New Room</DialogTitle>
+                <DialogContent>
+                  <Box sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <TextField
+                      fullWidth
+                      label="Room Name"
+                      value={roomName}
+                      onChange={(e) => setRoomName(e.target.value)}
+                      required
+                    />
+                    <TextField
+                      fullWidth
+                      label="Capacity"
+                      type="number"
+                      value={roomCapacity}
+                      onChange={(e) => setRoomCapacity(parseInt(e.target.value) || 0)}
+                      required
+                    />
+                    <TextField
+                      fullWidth
+                      label="Location (Optional)"
+                      value={roomLocation}
+                      onChange={(e) => setRoomLocation(e.target.value)}
+                    />
+                  </Box>
+                </DialogContent>
+                <DialogActions>
+                  <Button
+                    onClick={() => {
+                      setAddRoomDialogOpen(false);
+                      setRoomName("");
+                      setRoomCapacity(0);
+                      setRoomLocation("");
+                    }}
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleAddRoom}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? <CircularProgress size={20} /> : "Add Room"}
+                  </Button>
+                </DialogActions>
+              </Dialog>
             </Box>
           </TabPanel>
         </CardContent>
