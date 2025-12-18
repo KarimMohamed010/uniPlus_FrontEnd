@@ -2083,7 +2083,7 @@ export default function AdminDashboard() {
                 <Table>
                   <TableHead>
                     <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                      <TableCell></TableCell>
+                      {/* <TableCell></TableCell> */}
                       <TableCell>Name</TableCell>
                       <TableCell>Capacity</TableCell>
                       <TableCell>Location</TableCell>
@@ -2102,7 +2102,7 @@ export default function AdminDashboard() {
                     ) : (
                       roomsList.map((room) => (
                         <TableRow key={room.id}>
-                          <TableCell>{room.id}</TableCell>
+                          {/* <TableCell>{room.id}</TableCell> */}
                           <TableCell>{room.name}</TableCell>
                           <TableCell>{room.capacity}</TableCell>
                           <TableCell>{room.location || "-"}</TableCell>
