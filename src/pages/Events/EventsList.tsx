@@ -236,8 +236,7 @@ export default function EventsList({ teamID = -1 }: { teamID?: number }) {
     // -----------------------------------------------
 
     // --- ADDED: Mutation to Create Event ---
-    // Around line ~198
-// Around line ~198
+    
 const createEventMutation = useMutation({
     mutationFn: async (data: any) => {
         console.log('1. Raw data received in mutation:', data); // DEBUG
@@ -366,9 +365,9 @@ const createEventMutation = useMutation({
                 [eventId]: true
             }));
 
-            // Show success message
+            
             showSnackbar('Successfully registered for the event!', 'success');
-            // You could add a toast/snackbar here
+            
 
         } catch (error: any) {
             console.error('Registration failed:', error);
@@ -386,7 +385,7 @@ const createEventMutation = useMutation({
 
     const handleCancel = async (eventId: number) => {
         try {
-            // Call the cancel registration API
+            
             const response = await client.delete(`/events/${eventId}/cancel`);
 
             // Update local state
@@ -439,8 +438,7 @@ const createEventMutation = useMutation({
         setDeletingId(eventId);
         try {
             await client.delete(`/events/${eventId}`);
-            // 3. THIS IS THE MAGICAL PART (Instant Update)
-            // It manually filters the event out of the list so it vanishes instantly
+            
             queryClient.setQueryData(['events'], (oldEvents: Event[] | undefined) => {
                 return oldEvents ? oldEvents.filter(e => e.id !== eventId) : [];
             });
@@ -454,8 +452,7 @@ const createEventMutation = useMutation({
         }
     };
 
-    // --- PASTE THIS BEFORE "return (" ---
-    // Around line ~275
+    
 const handleCreateEvent = () => {
     // 1. Validate Required Fields
     if (!newEventData.title.trim()) return alert("Title is required");
@@ -625,7 +622,7 @@ const handleCreateEvent = () => {
                             value={newEventData.description}
                             onChange={(e) => setNewEventData({ ...newEventData, description: e.target.value })}
                         />
-                         <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Box sx={{ display: 'flex', gap: 2 }}>
                             <TextField
                                 label="Start Time"
                                 type="datetime-local"

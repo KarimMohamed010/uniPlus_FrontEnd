@@ -75,8 +75,8 @@ export default function ChatPage() {
       if (b.isSystem) return 1;
 
       // 2. Self Chat always second (after System)
-      if (a.id === user?.id) return -1;
-      if (b.id === user?.id) return 1;
+      // if (a.id === user?.id) return -1;
+      // if (b.id === user?.id) return 1;
 
       // 3. Others sorted by time (newest first)
       return new Date(b.lastMessageTime || 0).getTime() -
