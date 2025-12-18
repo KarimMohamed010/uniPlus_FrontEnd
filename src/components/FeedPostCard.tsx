@@ -36,6 +36,7 @@ export type FeedPost = {
   author: { id: number; fname: string; lname: string; imgUrl?: string };
   team: { id: number; name: string };
   media: Array<{ id: number; url: string; type: string; description?: string }>;
+  commentCount: number;
 };
 
 interface CommentAuthor {
@@ -143,6 +144,8 @@ function FeedPostCard({
   });
 
   const postComments = commentsQuery.data || [];
+  const commentsCountToShow =
+    typeof post.commentCount === "number" ? post.commentCount : postComments.length;
 
   const replyMutation = useMutation({
     mutationFn: async (payload: { content: string; parentId: number }) => {
@@ -402,7 +405,9 @@ function FeedPostCard({
         )}
 
         <Button size="small" onClick={onToggle} sx={{ mt: 2 }}>
-          {isOpen ? "Hide comments" : `Show comments (${postComments.length})`}
+          {isOpen
+            ? "Hide comments"
+            : `Show comments (${commentsCountToShow})`}
         </Button>
 
         {isOpen && (
