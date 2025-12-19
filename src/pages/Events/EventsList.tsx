@@ -208,6 +208,21 @@ export default function EventsList({ teamID = -1 }: { teamID?: number }) {
         },
         enabled: openCreate // Only fetch when modal is open
     });
+
+    const {
+        data: team,
+      } = useQuery({
+        queryKey: ["teamDetail", teamID],
+        queryFn: async () => {
+          const res = await client.get(`/teams/${teamID}`);
+          return res.data;
+        },
+        enabled: !!teamID,
+      });
+    
+      const isLeader = user?.id === team?.leaderId; // 2. Fetch Team Members
+    
+      
     // --------------------------------------
     // --- ADDED: Permission Check for Create Button ---
     const { data: permissions } = useQuery({
@@ -217,14 +232,14 @@ export default function EventsList({ teamID = -1 }: { teamID?: number }) {
             try {
                 // 1. Get Team Info for Leader
                 const teamRes = await client.get(`/teams/${teamID}`);
-                const leaderId = teamRes.data?.team?.leaderId;
                 
                 // 2. Get Members Info for Role
                 const membersRes = await client.get(`/teams/${teamID}/members`);
                 const members = membersRes.data?.members || [];
                 const myMember = members.find((m: any) => m.studentId === user.id);
-
-                const isLeader = leaderId === user.id;
+                
+                const leaderId = teamRes.data?.team?.leaderId;
+                const isLeader = leaderId == user.id;
                 const isOrganizer = myMember?.role === 'organizer';
 
                 return { canCreate: isLeader || isOrganizer };
@@ -484,7 +499,7 @@ const handleCreateEvent = () => {
             </Box>}
 
             {/* --- ADDED: Create Event Button Section --- */}
-            {teamID !== -1 && permissions?.canCreate && (
+            {teamID !== -1 && (permissions?.canCreate || isLeader) && (
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
                     <Button variant="contained" onClick={() => setOpenCreate(true)}>
                         Create Event
