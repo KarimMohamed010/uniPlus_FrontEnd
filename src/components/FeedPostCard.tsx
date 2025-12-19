@@ -481,11 +481,19 @@ function FeedPostCard({
                 </IconButton>
               </>
             ) : (
-              <IconButton
-                size="small"
-                color="warning"
-                onClick={() => setReportDialogOpen(true)}
-              >
+             <IconButton
+      size="small"
+        sx={{
+    color: "text.secondary",
+    "&:hover": {
+      color: "warning.main",
+    },
+    "&:focus-visible": {
+      color: "warning.main",
+    },
+  }}
+  onClick={() => setReportDialogOpen(true)}
+>
                 <ReportIcon />
               </IconButton>
             )}
