@@ -13,6 +13,7 @@ export const useSocket = () => {
         // Initialize socket only if we have a token and no existing connection
         socketRef.current = io(SOCKET_URL, {
             auth: {
+                transports: ["websocket"],
                 token: token,
                 senderName: user ? `${user.fname} ${user.lname}` : 'Unknown'
             },
