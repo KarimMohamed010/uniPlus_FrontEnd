@@ -39,7 +39,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from "react-router-dom";
 import Rating from '@mui/material/Rating';
 import TextField from '@mui/material/TextField';
-
+import confetti from 'canvas-confetti';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
 function stringToColor(string: string) {
     let hash = 0;
@@ -930,8 +931,38 @@ function EventPrice({ eventID, basePrice = 100, teamId }: { basePrice?: number, 
         enabled: !!eventID && !!userId,
     });
 
+    const { data: badgesData = [] } = useQuery({
+        queryKey: ['my-badges', userId],
+        queryFn: async () => {
+            const res = await client.get('/tickets/badges');
+            return res.data.badges;
+        },
+        enabled: !!userId
+    });
+
+    // 2. SAFEGUARD: Handle if no badge is found
+    const userBadge = badgesData.find((badge: any) => 
+        badge.userId === userId && badge.teamId === teamId
+    );
+
+    // 3. SAFEGUARD: Only convert to string if userBadge exists
+    const typeOfBadge = userBadge ? String(userBadge.type).toLowerCase() : null;
     const currentPrice = useDiscountedPrice(basePrice, teamId);
 
+    const handleCelebrate = (e: React.MouseEvent) => {
+        // This calculates the position of the click so confetti comes from the button
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = (rect.left + rect.width / 2) / window.innerWidth;
+        const y = (rect.top + rect.height / 2) / window.innerHeight;
+
+        confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { x, y }, // Spawns right at the chip
+            colors: ['#FFD700', '#C0C0C0', '#ffffff'], // Gold, Silver, White
+            zIndex: 9999, // Ensures it appears on top of modals
+        });
+    };
     return (
         <div>
             {/* 3. Logic: If ticket exists, show that price. Else, show sales price. */}
@@ -947,13 +978,42 @@ function EventPrice({ eventID, basePrice = 100, teamId }: { basePrice?: number, 
             ) : (
                 // --- CASE B: User does not have a ticket (Standard logic) ---
                 basePrice !== currentPrice ? (
+                    <div>
+                        {typeOfBadge != 'subscriber' && typeOfBadge != 'Beginner' && userBadge.usageNum != 0 && (
+                                <Chip 
+                    label={typeOfBadge} 
+                    onClick={handleCelebrate}
+                    // Add a relevant icon
+                    icon={<AutoAwesomeIcon style={{ color: 'gold' }} />} 
+                    sx={{ 
+                        fontWeight: 'bold',
+                        marginTop: 1,
+                        
+                        textTransform: 'uppercase',
+                        
+                        color: 'white',
+                        background: 'linear-gradient(45deg, #FE6B8B 30%, #FF8E53 90%)',
+                        
+                        boxShadow: '0 3px 5px 2px rgba(255, 105, 135, .3)',
+                        transition: 'all 0.3s ease',
+                        '&:hover': { 
+                            transform: 'translateY(-2px) scale(1.05)', 
+                            boxShadow: '0 6px 10px 4px rgba(255, 105, 135, .4)',
+                        },
+                        
+                        mb:1
+                    }} 
+                />
+                )}  
                     <Typography variant="h6">
                         {basePrice != currentPrice && <span style={{ textDecoration: 'line-through', color: 'gray', marginRight: '4px' }}>
                             {basePrice}
                         </span>}
                         {currentPrice}
                         <span style={{ fontSize: 15 }}>EGP</span>
+                        
                     </Typography>
+                    </div>
                 ) : (
                     <Typography variant="h6">
                         {basePrice}<span style={{ fontSize: 15 }}>EGP</span>
