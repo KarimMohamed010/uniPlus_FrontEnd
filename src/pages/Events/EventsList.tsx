@@ -938,9 +938,9 @@ function EventPrice({ eventID, basePrice = 100, teamId }: { basePrice?: number, 
             {existingTicket?.price != null ? (
                 // --- CASE A: User already has a ticket ---
                 <Typography variant="h6" >
-                    <span style={{ textDecoration: 'line-through', color: 'gray', marginRight: '4px' }}>
+                    {basePrice !=existingTicket.price && <span style={{ textDecoration: 'line-through', color: 'gray', marginRight: '4px' }}>
                         {basePrice}
-                    </span>
+                    </span>}
                     {existingTicket.price}
                     <span style={{ fontSize: 15 }}>EGP</span>
                 </Typography>
