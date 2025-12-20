@@ -518,7 +518,7 @@ const handleCreateEvent = () => {
 
                     return (
                         <Grid size="auto" key={event.id}>
-                            <Card sx={{ display: 'flex', maxWidth: '620px' }} >
+                            <Card sx={{ display: 'flex', maxWidth: '720px' }} >
                                 <CardMedia component="div" sx={{ backgroundColor: 'gold', width: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'center', p: 2.5, textAlign: 'center' }}>
                                     <Typography variant="h4" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
                                         {format(new Date(event.startTime), 'dd MMM yyyy')}
