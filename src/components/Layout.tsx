@@ -166,7 +166,7 @@ export default function Layout() {
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {customTitle || navItems.find((i) => i.path === location.pathname)?.text ||
-              "UniConnect"}
+              "Uni+"}
           </Typography>
 
           <UserSearch />
