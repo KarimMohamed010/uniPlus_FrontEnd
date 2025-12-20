@@ -3,7 +3,6 @@ import {
   Typography,
   Box,
   Paper,
-  Grid,
   Button,
   Dialog,
   DialogTitle,
@@ -270,7 +269,6 @@ export default function OrganizerDashboard() {
       <Paper sx={{ mt: 3 }}>
         <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}>
           <Tab label="QR Scanner" />
-          <Tab label="Your Teams" />
           <Tab label="Scan History" />
           <Tab label="Issue Certificates" />
         </Tabs>
@@ -283,39 +281,8 @@ export default function OrganizerDashboard() {
             Open Scanner
           </Button>
         </TabPanel>
-        {/* Your Teams Tab */}{" "}
+        
         <TabPanel value={tabValue} index={1}>
-          {" "}
-          <Grid container spacing={2}>
-            {" "}
-            {user?.roles.team && user.roles.team.length > 0 ? (
-              user.roles.team.map((team) => (
-                <Grid key={team.teamId} size={{ xs: 12, md: 6 }}>
-                  {" "}
-                  <Paper sx={{ p: 3 }}>
-                    {" "}
-                    <Typography variant="h6">
-                      Team {team.teamId}
-                    </Typography>{" "}
-                    <Typography variant="body2" color="textSecondary">
-                      {" "}
-                      <strong>Role:</strong> {team.role}{" "}
-                    </Typography>{" "}
-                  </Paper>{" "}
-                </Grid>
-              ))
-            ) : (
-              <Grid size={{ xs: 12 }}>
-                {" "}
-                <Alert severity="info">
-                  {" "}
-                  You are not part of any teams yet.{" "}
-                </Alert>{" "}
-              </Grid>
-            )}{" "}
-          </Grid>{" "}
-        </TabPanel>
-        <TabPanel value={tabValue} index={2}>
           {scanHistory.length === 0 ? (
             <Alert severity="info">No scans yet</Alert>
           ) : (
@@ -332,7 +299,7 @@ export default function OrganizerDashboard() {
             </Table>
           )}
         </TabPanel>
-        <TabPanel value={tabValue} index={3}>
+        <TabPanel value={tabValue} index={2}>
           <Typography variant="h6" sx={{ mb: 2 }}>
             Issue Certificates
           </Typography>
