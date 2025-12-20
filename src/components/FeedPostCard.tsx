@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import {
   Alert,
   Avatar,
@@ -30,6 +30,7 @@ import {
   ReportProblem as ReportIcon,
 } from "@mui/icons-material";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import client from "../api/client";
 import { FileUploaderRegular } from "@uploadcare/react-uploader";
 import "@uploadcare/react-uploader/core.css";
@@ -81,6 +82,7 @@ function FeedPostCard({
   onSubmitComment: (content: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // --- UI States ---
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -101,7 +103,12 @@ function FeedPostCard({
   const uploadedUrlsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    setLocalPost(post);
+    // Deduplicate media by URL when setting localPost
+    const deduplicatedMedia = post.media?.filter(
+      (item, index, self) =>
+        index === self.findIndex((m) => m.url === item.url)
+    ) || [];
+    setLocalPost({ ...post, media: deduplicatedMedia });
   }, [post]);
 
   useEffect(() => {
@@ -130,16 +137,18 @@ function FeedPostCard({
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(["feed"], (oldData: any) => {
-        if (!oldData) return oldData;
-        const updateFunc = (p: FeedPost) =>
-          p.id === post.id ? { ...p, ...(data.post || data) } : p;
-        if (Array.isArray(oldData)) return oldData.map(updateFunc);
-        if (oldData.posts)
-          return { ...oldData, posts: oldData.posts.map(updateFunc) };
-        return oldData;
-      });
+      const updatedPost = data.post || data;
+      // Update local state immediately for instant UI feedback
+      setLocalPost((prev) => ({
+        ...prev,
+        ...updatedPost,
+      }));
+      
+      // Invalidate queries to refetch fresh data
       queryClient.invalidateQueries({ queryKey: ["feed"] });
+      queryClient.invalidateQueries({ queryKey: ["feedPosts"] });
+      queryClient.invalidateQueries({ queryKey: ["teamPosts", post.team?.id] });
+      
       setSnackbar({
         open: true,
         message: "Post updated!",
@@ -243,7 +252,12 @@ function FeedPostCard({
 
   const handleUploadcareChange = (items: any) => {
     const entries = (items?.allEntries || []) as any[];
-    const uploaded = entries
+    // First, deduplicate the entries array itself
+    const uniqueEntries = entries.filter(
+      (entry, index, self) =>
+        entry?.cdnUrl && index === self.findIndex((e) => e?.cdnUrl === entry?.cdnUrl)
+    );
+    const uploaded = uniqueEntries
       .filter((f) => f?.status === "success" && f?.cdnUrl)
       .map((f) => ({
         url: String(f.cdnUrl),
@@ -347,9 +361,22 @@ function FeedPostCard({
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
           <Avatar
             src={node.authorDetails?.imgUrl}
-            sx={{ width: 24, height: 24 }}
+            sx={{ 
+              width: 24, 
+              height: 24,
+              cursor: node.author ? "pointer" : "default"
+            }}
+            onClick={() => node.author && navigate(`/profile/${node.author}`)}
           />
-          <Typography variant="subtitle2" fontWeight={700}>
+          <Typography 
+            variant="subtitle2" 
+            fontWeight={700}
+            sx={{
+              cursor: node.author ? "pointer" : "default",
+              "&:hover": node.author ? { textDecoration: "underline" } : {}
+            }}
+            onClick={() => node.author && navigate(`/profile/${node.author}`)}
+          >
             {node.authorDetails
               ? `${node.authorDetails.fname} ${node.authorDetails.lname}`
               : "User"}
@@ -455,12 +482,49 @@ function FeedPostCard({
     <Card variant="outlined" sx={{ mb: 2 }}>
       <CardHeader
         avatar={
-          <Avatar src={localPost.author?.imgUrl}>
+          <Avatar 
+            src={localPost.author?.imgUrl}
+            sx={{ cursor: "pointer" }}
+            onClick={() => navigate(`/profile/${localPost.author?.id}`)}
+          >
             {(localPost.author?.fname || "U").charAt(0)}
           </Avatar>
         }
-        title={`${localPost.author?.fname} ${localPost.author?.lname}`}
-        subheader={new Date(localPost.issuedAt).toLocaleString()}
+        title={
+          <Typography
+            variant="subtitle1"
+            sx={{ 
+              cursor: "pointer",
+              "&:hover": { textDecoration: "underline" }
+            }}
+            onClick={() => navigate(`/profile/${localPost.author?.id}`)}
+          >
+            {`${localPost.author?.fname} ${localPost.author?.lname}`}
+          </Typography>
+        }
+        subheader={
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <Typography variant="caption" color="text.secondary">
+              {new Date(localPost.issuedAt).toLocaleString()}
+            </Typography>
+            {localPost.team && (
+              <>
+                <Typography variant="caption" color="text.secondary">•</Typography>
+                <Typography
+                  variant="caption"
+                  sx={{ 
+                    cursor: "pointer",
+                    color: "primary.main",
+                    "&:hover": { textDecoration: "underline" }
+                  }}
+                  onClick={() => navigate(`/teams/${localPost.team?.id}`)}
+                >
+                  {localPost.team?.name}
+                </Typography>
+              </>
+            )}
+          </Stack>
+        }
         action={
           <Stack direction="row" spacing={0.5}>
             {isMyPost ? (
@@ -512,8 +576,8 @@ function FeedPostCard({
               cols={localPost.media.length > 1 ? 2 : 1}
               gap={8}
             >
-              {localPost.media.map((item) => (
-                <ImageListItem key={item.id}>
+              {localPost.media.map((item, index) => (
+                <ImageListItem key={`${item.id}-${item.url}-${index}`}>
                   <Box
                     component="img"
                     src={item.url}
@@ -527,7 +591,7 @@ function FeedPostCard({
         <Button size="small" onClick={onToggle} sx={{ mt: 2 }}>
           {isOpen
             ? "Hide comments"
-            : `Show comments (${commentsQuery.data?.length || 0})`}
+            : `Show comments (${commentsQuery.data?.length ?? post.commentCount ?? 0})`}
         </Button>
 
         {isOpen && (

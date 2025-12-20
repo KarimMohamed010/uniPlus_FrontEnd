@@ -189,11 +189,13 @@ export default function TeamDetails() {
   const [commentErrors, setCommentErrors] = useState<Record<number, string>>(
     {}
   );
+  
   const userJsonString = localStorage.getItem("user");
   const userID = userJsonString
     ? parseInt(JSON.parse(userJsonString).id, 10)
-    : 0; // 1. Fetch Team Details
+    : 0;
 
+  // 1. Fetch Team Details
   const userGlobalRole = userJsonString
     ? JSON.parse(userJsonString).roles?.global
     : undefined;
@@ -1351,7 +1353,12 @@ export default function TeamDetails() {
                       "image";
                     return { url, type } as NewPostMediaItem;
                   });
-                setNewPostMedia(uploaded);
+                // Deduplicate by URL to prevent duplicates
+                const uniqueMedia = uploaded.filter(
+                  (item, index, self) =>
+                    index === self.findIndex((t) => t.url === item.url)
+                );
+                setNewPostMedia(uniqueMedia);
               }}
             />
 
